@@ -93,7 +93,7 @@ func (h *RecipeHandler) GetRecipeIngredients(w http.ResponseWriter, r *http.Requ
 	}
 
 	rows, err := h.DB.Query(`
-		SELECT ri.ingredient_id, i.name, ri.quantity, COALESCE(i.unit, '') as unit
+		SELECT ri.ingredient_id, i.name, ri.quantity, COALESCE(i.unit, '') as unit, COALESCE(i.price, 0) as price
 		FROM recipe_ingredients ri
 		JOIN ingredients i ON ri.ingredient_id = i.id
 		WHERE ri.recipe_id = $1
@@ -109,12 +109,13 @@ func (h *RecipeHandler) GetRecipeIngredients(w http.ResponseWriter, r *http.Requ
 		Name         string  `json:"name"`
 		Quantity     float64 `json:"quantity"`
 		Unit         string  `json:"unit"`
+		Price        float64 `json:"price"`
 	}
 
 	var ingredients []IngredientDetail
 	for rows.Next() {
 		var ing IngredientDetail
-		if err := rows.Scan(&ing.IngredientID, &ing.Name, &ing.Quantity, &ing.Unit); err != nil {
+		if err := rows.Scan(&ing.IngredientID, &ing.Name, &ing.Quantity, &ing.Unit, &ing.Price); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

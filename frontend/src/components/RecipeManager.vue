@@ -34,7 +34,7 @@
           <div class="flex justify-between items-center relative z-10">
             <div>
               <h3 class="font-bold text-xl text-white tracking-wide">{{ recipe.name }}</h3>
-              <p class="text-white/60 text-xs mt-1">{{ (recipe._ingredients || []).length }} ingredients</p>
+              <p class="text-white/60 text-xs mt-1">{{ (recipe._ingredients || []).length }} ingredients · ${{ recipeTotalCost(recipe) }}</p>
             </div>
             <div class="flex gap-2 items-center">
               <span class="bg-white/20 backdrop-blur-sm text-white w-7 h-7 rounded-full flex items-center justify-center text-xs">
@@ -69,6 +69,7 @@
                   <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
                   <span class="text-sm text-gray-700 font-medium">{{ ing.name }}</span>
                   <span class="text-sm text-gray-400">× {{ ing.quantity }}</span>
+                  <span v-if="ing.price" class="text-xs text-emerald-500 font-medium">${{ (ing.price * ing.quantity).toFixed(0) }}</span>
                   <span v-if="ing.unit" class="text-xs text-gray-300">{{ ing.unit }}</span>
                 </div>
                 <button @click="removeIngredient(recipe.id, ing.ingredient_id)"
@@ -117,6 +118,10 @@ const cardColors = [
   'bg-gradient-to-br from-sky-500 via-blue-500 to-indigo-500',
 ]
 
+const recipeTotalCost = (recipe) => {
+  const ings = recipe._ingredients || []
+  return ings.reduce((sum, ing) => sum + (ing.price || 0) * ing.quantity, 0).toFixed(0)
+}
 const fetchRecipes = async () => {
     try {
         const res = await fetch('http://localhost:8080/api/recipes')

@@ -8,7 +8,7 @@
       <div class="flex gap-2">
         <input v-model="newItem.name" placeholder="Name" class="border p-2 rounded" />
         <input v-model.number="newItem.current_stock" type="number" placeholder="Stock" class="border p-2 rounded w-24" />
-        <input v-model.number="newItem.price" type="number" step="0.01" placeholder="Price" class="border p-2 rounded w-24" />
+        <input v-model.number="newItem.price" type="number" step="1" min="0" placeholder="Price" class="border p-2 rounded w-24" />
         <button @click="addItem" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Add</button>
       </div>
     </div>
@@ -32,7 +32,7 @@
                 <td class="p-3"><input v-model="editForm.name" class="border p-1 rounded w-full" /></td>
                 <td class="p-3"><input v-model.number="editForm.current_stock" type="number" class="border p-1 rounded w-20" /></td>
                 <td class="p-3 text-gray-600">{{ item.planned_consumption }}</td>
-                <td class="p-3"><input v-model.number="editForm.price" type="number" step="0.01" class="border p-1 rounded w-20" /></td>
+                <td class="p-3"><input v-model.number="editForm.price" type="number" step="1" min="0" class="border p-1 rounded w-20" /></td>
                 <td class="p-3">
                     <div class="flex gap-1">
                     <button @click="saveEdit(item)" class="bg-green-500 text-white px-2 py-1 rounded text-sm hover:bg-green-600">Save</button>
