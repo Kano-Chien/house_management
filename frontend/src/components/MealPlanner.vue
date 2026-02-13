@@ -25,10 +25,10 @@
           <!-- Meals for this day -->
           <div v-for="meal in getMealsForDay(day.dateStr)" :key="meal.id"
                class="group relative rounded-lg p-2 text-left transition-all"
-               :class="meal.meal_type === 'Lunch' ? 'bg-amber-50 border border-amber-100' : 'bg-indigo-50 border border-indigo-100'">
+               :class="mealTypeStyle(meal.meal_type).bg">
             <div class="text-[10px] uppercase tracking-wider font-bold"
-                 :class="meal.meal_type === 'Lunch' ? 'text-amber-500' : 'text-indigo-500'">
-              {{ meal.meal_type === 'Lunch' ? '☀️' : '🌙' }} {{ meal.meal_type }}
+                 :class="mealTypeStyle(meal.meal_type).text">
+              {{ mealTypeStyle(meal.meal_type).icon }} {{ meal.meal_type }}
             </div>
             <div class="text-xs font-semibold text-gray-700 truncate">{{ meal.recipe_name }}</div>
             <!-- Delete button -->
@@ -52,6 +52,9 @@
         <div class="mb-3">
           <label class="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Meal Type</label>
           <div class="flex gap-2">
+            <button @click="modalMealType = 'Breakfast'"
+                    :class="modalMealType === 'Breakfast' ? 'bg-emerald-500 text-white' : 'bg-gray-100 text-gray-600'"
+                    class="flex-1 py-2 rounded-lg font-medium text-sm transition-colors">🌅 Breakfast</button>
             <button @click="modalMealType = 'Lunch'"
                     :class="modalMealType === 'Lunch' ? 'bg-amber-500 text-white' : 'bg-gray-100 text-gray-600'"
                     class="flex-1 py-2 rounded-lg font-medium text-sm transition-colors">☀️ Lunch</button>
@@ -135,9 +138,8 @@ const getMealsForDay = (dateStr) => {
       return mDate === dateStr
     })
     .sort((a, b) => {
-      if (a.meal_type === 'Lunch' && b.meal_type === 'Dinner') return -1
-      if (a.meal_type === 'Dinner' && b.meal_type === 'Lunch') return 1
-      return 0
+      const order = { Breakfast: 0, Lunch: 1, Dinner: 2 }
+      return (order[a.meal_type] ?? 9) - (order[b.meal_type] ?? 9)
     })
 }
 
@@ -153,6 +155,15 @@ const fetchMealPlan = async () => {
     const res = await fetch('http://localhost:8080/api/mealplan')
     if (res.ok) mealPlan.value = (await res.json()) || []
   } catch (e) { console.error(e) }
+}
+
+const mealTypeStyle = (type) => {
+  switch (type) {
+    case 'Breakfast': return { bg: 'bg-emerald-50 border border-emerald-100', text: 'text-emerald-500', icon: '🌅' }
+    case 'Lunch': return { bg: 'bg-amber-50 border border-amber-100', text: 'text-amber-500', icon: '☀️' }
+    case 'Dinner': return { bg: 'bg-indigo-50 border border-indigo-100', text: 'text-indigo-500', icon: '🌙' }
+    default: return { bg: 'bg-gray-50 border border-gray-100', text: 'text-gray-500', icon: '🍽️' }
+  }
 }
 
 const openAdd = (dateStr) => {

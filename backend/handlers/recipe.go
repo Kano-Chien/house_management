@@ -218,3 +218,65 @@ func (h *RecipeHandler) DeleteRecipe(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "deleted"})
 }
+
+func (h *RecipeHandler) UpdateRecipeName(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if req.Name == "" {
+		http.Error(w, "name is required", http.StatusBadRequest)
+		return
+	}
+
+	result, err := h.DB.Exec("UPDATE recipes SET name = $1 WHERE id = $2", req.Name, req.ID)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		http.Error(w, "Recipe not found", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
+}
+
+func (h *RecipeHandler) UpdateIngredientQuantity(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		RecipeID     int     `json:"recipe_id"`
+		IngredientID int     `json:"ingredient_id"`
+		Quantity     float64 `json:"quantity"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if req.Quantity <= 0 {
+		http.Error(w, "quantity must be positive", http.StatusBadRequest)
+		return
+	}
+
+	result, err := h.DB.Exec(
+		"UPDATE recipe_ingredients SET quantity = $1 WHERE recipe_id = $2 AND ingredient_id = $3",
+		req.Quantity, req.RecipeID, req.IngredientID,
+	)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		http.Error(w, "Ingredient not found in recipe", http.StatusNotFound)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
+}

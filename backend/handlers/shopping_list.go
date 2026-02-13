@@ -27,14 +27,13 @@ func (h *ShoppingListHandler) GetShoppingList(w http.ResponseWriter, r *http.Req
 				SUM(ri.quantity) as total_required
 			FROM recipe_ingredients ri
 			JOIN meal_plan mp ON ri.recipe_id = mp.recipe_id
-			WHERE mp.date >= CURRENT_DATE
 			GROUP BY ri.ingredient_id
 		)
 		SELECT 
 			i.name,
 			(req.total_required - i.current_stock) as quantity_needed,
-			i.unit,
-			((req.total_required - i.current_stock) * i.price) as estimated_cost
+			COALESCE(i.unit, '') as unit,
+			((req.total_required - i.current_stock) * COALESCE(i.price, 0)) as estimated_cost
 		FROM ingredients i
 		JOIN RequiredIngredients req ON i.id = req.ingredient_id
 		WHERE i.current_stock < req.total_required

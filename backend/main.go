@@ -1,17 +1,21 @@
 package main
 
 import (
+	"bufio"
 	"database/sql"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/Kano-Chien/house_management/backend/handlers"
 	_ "github.com/lib/pq"
 )
 
 func main() {
+	loadEnv(".env")
+
 	// Database connection string
 	connStr := os.Getenv("DATABASE_URL")
 	if connStr == "" {
@@ -44,6 +48,7 @@ func main() {
 	recipeHandler := &handlers.RecipeHandler{DB: db}
 	mealPlanHandler := &handlers.MealPlanHandler{DB: db}
 	shoppingListHandler := &handlers.ShoppingListHandler{DB: db}
+	lineNotifyHandler := &handlers.LineNotifyHandler{DB: db}
 
 	// Router setup - using path-only patterns with method checks
 	mux := http.NewServeMux()
@@ -121,6 +126,22 @@ func main() {
 		}
 	})
 
+	mux.HandleFunc("/api/recipes/edit", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "PUT" {
+			recipeHandler.UpdateRecipeName(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/recipes/ingredients/edit", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "PUT" {
+			recipeHandler.UpdateIngredientQuantity(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	mux.HandleFunc("/api/mealplan", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
@@ -149,6 +170,14 @@ func main() {
 	})
 
 	// CORS Middleware
+	mux.HandleFunc("/api/line/send-shopping-list", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			lineNotifyHandler.SendShoppingList(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	handler := enableCORS(mux)
 
 	// Start Server
@@ -172,4 +201,25 @@ func enableCORS(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+func loadEnv(path string) {
+	fmt.Printf("Loading .env from: %s\n", path)
+	f, err := os.Open(path)
+	if err != nil {
+		fmt.Printf("Error open .env: %v\n", err)
+		return
+	}
+	defer f.Close()
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) == 2 {
+			os.Setenv(parts[0], parts[1])
+			fmt.Printf("Loaded env: %s\n", parts[0])
+		}
+	}
 }

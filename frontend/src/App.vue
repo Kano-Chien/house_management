@@ -1,25 +1,25 @@
 <template>
   <div class="min-h-screen bg-gray-50 font-sans text-gray-900">
     <!-- Header / Nav -->
-    <nav class="bg-blue-600 text-white p-4 shadow-md">
+    <nav style="background-color: #E0E0E0;" class="text-gray-800 p-4 shadow-md">
       <div class="max-w-4xl mx-auto flex justify-between items-center">
         <h1 class="text-xl font-bold">🏠 Home Inventory</h1>
         <div class="flex gap-4">
           <button 
             @click="currentTab = 'inventory'"
-            :class="['px-3 py-1 rounded', currentTab === 'inventory' ? 'bg-blue-800' : 'hover:bg-blue-500']"
+            :class="['px-3 py-1 rounded font-medium transition-colors', currentTab === 'inventory' ? 'bg-gray-700 text-white' : 'hover:bg-gray-300']"
           >Inventory</button>
           <button 
             @click="currentTab = 'recipes'"
-             :class="['px-3 py-1 rounded', currentTab === 'recipes' ? 'bg-blue-800' : 'hover:bg-blue-500']"
+             :class="['px-3 py-1 rounded font-medium transition-colors', currentTab === 'recipes' ? 'bg-gray-700 text-white' : 'hover:bg-gray-300']"
           >Recipes</button>
           <button 
             @click="currentTab = 'planning'"
-             :class="['px-3 py-1 rounded', currentTab === 'planning' ? 'bg-blue-800' : 'hover:bg-blue-500']"
+             :class="['px-3 py-1 rounded font-medium transition-colors', currentTab === 'planning' ? 'bg-gray-700 text-white' : 'hover:bg-gray-300']"
           >Meal Plan</button>
           <button 
             @click="currentTab = 'shopping'"
-             :class="['px-3 py-1 rounded', currentTab === 'shopping' ? 'bg-blue-800' : 'hover:bg-blue-500']"
+             :class="['px-3 py-1 rounded font-medium transition-colors', currentTab === 'shopping' ? 'bg-gray-700 text-white' : 'hover:bg-gray-300']"
           >Shopping List</button>
         </div>
       </div>

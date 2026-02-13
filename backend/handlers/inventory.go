@@ -17,11 +17,12 @@ func (h *InventoryHandler) GetInventory(w http.ResponseWriter, r *http.Request) 
 	query := `
 		SELECT 
 			i.id, i.name, i.current_stock, COALESCE(i.unit, '') as unit, i.expiry_date, COALESCE(i.price, 0) as price,
+			COALESCE(i.category, 'food') as category,
 			COALESCE((
 				SELECT SUM(ri.quantity)
 				FROM recipe_ingredients ri
 				INNER JOIN meal_plan mp ON ri.recipe_id = mp.recipe_id
-				WHERE ri.ingredient_id = i.id AND mp.date >= CURRENT_DATE
+				WHERE ri.ingredient_id = i.id
 			), 0) as planned_consumption
 		FROM ingredients i
 		GROUP BY i.id
@@ -37,7 +38,7 @@ func (h *InventoryHandler) GetInventory(w http.ResponseWriter, r *http.Request) 
 	for rows.Next() {
 		var i models.Ingredient
 		// Use sql.NullFloat64 or similar if needed, but COALESCE handles nulls
-		if err := rows.Scan(&i.ID, &i.Name, &i.CurrentStock, &i.Unit, &i.ExpiryDate, &i.Price, &i.PlannedConsumption); err != nil {
+		if err := rows.Scan(&i.ID, &i.Name, &i.CurrentStock, &i.Unit, &i.ExpiryDate, &i.Price, &i.Category, &i.PlannedConsumption); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -55,9 +56,12 @@ func (h *InventoryHandler) AddIngredient(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	if i.Category == "" {
+		i.Category = "food"
+	}
 	err := h.DB.QueryRow(
-		"INSERT INTO ingredients (name, current_stock, unit, expiry_date, price) VALUES ($1, $2, $3, $4, $5) RETURNING id",
-		i.Name, i.CurrentStock, i.Unit, i.ExpiryDate, i.Price,
+		"INSERT INTO ingredients (name, current_stock, unit, expiry_date, price, category) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id",
+		i.Name, i.CurrentStock, i.Unit, i.ExpiryDate, i.Price, i.Category,
 	).Scan(&i.ID)
 
 	if err != nil {
@@ -98,19 +102,23 @@ func (h *InventoryHandler) UpdateStock(w http.ResponseWriter, r *http.Request) {
 
 func (h *InventoryHandler) EditIngredient(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ID    int     `json:"id"`
-		Name  string  `json:"name"`
-		Stock float64 `json:"current_stock"`
-		Price float64 `json:"price"`
+		ID       int     `json:"id"`
+		Name     string  `json:"name"`
+		Stock    float64 `json:"current_stock"`
+		Price    float64 `json:"price"`
+		Category string  `json:"category"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
+	if req.Category == "" {
+		req.Category = "food"
+	}
 
 	result, err := h.DB.Exec(
-		"UPDATE ingredients SET name = $1, current_stock = $2, price = $3 WHERE id = $4",
-		req.Name, req.Stock, req.Price, req.ID,
+		"UPDATE ingredients SET name = $1, current_stock = $2, price = $3, category = $4 WHERE id = $5",
+		req.Name, req.Stock, req.Price, req.Category, req.ID,
 	)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)

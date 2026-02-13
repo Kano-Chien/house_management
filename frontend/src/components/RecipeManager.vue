@@ -6,6 +6,7 @@
     <div class="mb-8 p-5 bg-white rounded-2xl shadow-lg border border-gray-100">
       <div class="flex gap-3">
         <input v-model="newRecipeName" placeholder="What are you cooking?"
+          @keyup.enter="addRecipe"
           class="border-2 border-gray-200 p-3 rounded-xl flex-1 text-base focus:ring-2 focus:ring-emerald-400 focus:border-emerald-400 focus:outline-none transition-all placeholder-gray-300" />
         <button @click="addRecipe"
           class="bg-gradient-to-r from-emerald-500 to-green-500 text-white px-6 py-3 rounded-xl hover:from-emerald-600 hover:to-green-600 transition-all font-semibold shadow-md hover:shadow-lg active:scale-95">
@@ -27,17 +28,33 @@
 
         <!-- Card Header -->
         <div :class="cardColors[idx % cardColors.length]"
-             class="p-5 cursor-pointer relative overflow-hidden" @click="toggleRecipe(recipe.id)">
-          <!-- Decorative circle -->
+             class="p-5 relative overflow-hidden">
+          <!-- Decorative circles -->
           <div class="absolute -top-6 -right-6 w-24 h-24 bg-white/10 rounded-full"></div>
           <div class="absolute -bottom-8 -left-4 w-20 h-20 bg-white/5 rounded-full"></div>
           <div class="flex justify-between items-center relative z-10">
-            <div>
-              <h3 class="font-bold text-xl text-white tracking-wide">{{ recipe.name }}</h3>
-              <p class="text-white/60 text-xs mt-1">{{ (recipe._ingredients || []).length }} ingredients · ${{ recipeTotalCost(recipe) }}</p>
+            <div class="flex-1 min-w-0 mr-3">
+              <!-- Editable Recipe Name -->
+              <div v-if="editingNameId === recipe.id" class="flex gap-2 items-center">
+                <input v-model="editNameValue" ref="nameEditInput"
+                  @keyup.enter="saveRecipeName(recipe)"
+                  @keyup.escape="editingNameId = null"
+                  @blur="saveRecipeName(recipe)"
+                  class="bg-white/20 backdrop-blur-sm text-white font-bold text-xl border border-white/30 rounded-lg px-2 py-1 w-full focus:outline-none focus:ring-2 focus:ring-white/50 placeholder-white/50" />
+              </div>
+              <div v-else class="cursor-pointer" @click="startEditName(recipe)">
+                <h3 class="font-bold text-xl text-white tracking-wide flex items-center gap-2">
+                  {{ recipe.name }}
+                  <span class="opacity-0 group-hover:opacity-60 text-white/80 text-xs transition-opacity">✏️</span>
+                </h3>
+              </div>
+              <p class="text-white/60 text-xs mt-1 cursor-pointer" @click="toggleRecipe(recipe.id)">
+                {{ (recipe._ingredients || []).length }} ingredients · ${{ recipeTotalCost(recipe) }}
+              </p>
             </div>
-            <div class="flex gap-2 items-center">
-              <span class="bg-white/20 backdrop-blur-sm text-white w-7 h-7 rounded-full flex items-center justify-center text-xs">
+            <div class="flex gap-2 items-center flex-shrink-0">
+              <span class="bg-white/20 backdrop-blur-sm text-white w-7 h-7 rounded-full flex items-center justify-center text-xs cursor-pointer"
+                @click="toggleRecipe(recipe.id)">
                 {{ expandedId === recipe.id ? '▲' : '▼' }}
               </span>
               <button @click.stop="deleteRecipe(recipe)"
@@ -49,7 +66,7 @@
         <!-- Card Body -->
         <div class="bg-white">
           <!-- Ingredient Tags (always visible) -->
-          <div class="px-5 pt-4 pb-3 flex flex-wrap gap-1.5">
+          <div class="px-5 pt-4 pb-3 flex flex-wrap gap-1.5 cursor-pointer" @click="toggleRecipe(recipe.id)">
             <span v-for="ing in (recipe._ingredients || [])" :key="ing.ingredient_id"
                   class="bg-gradient-to-r from-gray-50 to-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-medium border border-gray-200 shadow-sm">
               {{ ing.name }} × {{ ing.quantity }}
@@ -68,7 +85,22 @@
                 <div class="flex items-center gap-2">
                   <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
                   <span class="text-sm text-gray-700 font-medium">{{ ing.name }}</span>
-                  <span class="text-sm text-gray-400">× {{ ing.quantity }}</span>
+
+                  <!-- Editable Quantity -->
+                  <span v-if="editingQty && editingQty.ingredient_id === ing.ingredient_id" class="flex items-center gap-1">
+                    <span class="text-sm text-gray-400">×</span>
+                    <input v-model.number="editQtyValue" type="number" step="1" min="1"
+                      ref="qtyEditInput"
+                      @keyup.enter="saveIngredientQty(recipe.id, ing)"
+                      @keyup.escape="editingQty = null"
+                      @blur="saveIngredientQty(recipe.id, ing)"
+                      class="border border-blue-300 rounded px-1.5 py-0.5 w-14 text-sm text-center focus:ring-2 focus:ring-blue-400 focus:outline-none" />
+                  </span>
+                  <span v-else @click="startEditQty(ing)"
+                    class="text-sm text-gray-400 cursor-pointer hover:text-blue-500 hover:bg-blue-50 px-1.5 py-0.5 rounded transition-all">
+                    × {{ ing.quantity }}
+                  </span>
+
                   <span v-if="ing.price" class="text-xs text-emerald-500 font-medium">${{ (ing.price * ing.quantity).toFixed(0) }}</span>
                   <span v-if="ing.unit" class="text-xs text-gray-300">{{ ing.unit }}</span>
                 </div>
@@ -101,13 +133,21 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, nextTick } from 'vue'
 
 const recipes = ref([])
 const newRecipeName = ref('')
 const expandedId = ref(null)
 const recipeIngredients = ref([])
 const addIngForm = ref({ new_name: '', quantity: 1 })
+
+// Editing state
+const editingNameId = ref(null)
+const editNameValue = ref('')
+const editingQty = ref(null)
+const editQtyValue = ref(1)
+const nameEditInput = ref(null)
+const qtyEditInput = ref(null)
 
 const cardColors = [
   'bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600',
@@ -122,6 +162,70 @@ const recipeTotalCost = (recipe) => {
   const ings = recipe._ingredients || []
   return ings.reduce((sum, ing) => sum + (ing.price || 0) * ing.quantity, 0).toFixed(0)
 }
+
+// ---- Recipe Name Editing ----
+const startEditName = async (recipe) => {
+  editingNameId.value = recipe.id
+  editNameValue.value = recipe.name
+  await nextTick()
+  const inputs = nameEditInput.value
+  if (Array.isArray(inputs) && inputs.length) inputs[0].focus()
+  else if (inputs) inputs.focus()
+}
+
+const saveRecipeName = async (recipe) => {
+  if (!editNameValue.value || editNameValue.value === recipe.name) {
+    editingNameId.value = null
+    return
+  }
+  try {
+    const res = await fetch('http://localhost:8080/api/recipes/edit', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: recipe.id, name: editNameValue.value })
+    })
+    if (res.ok) {
+      recipe.name = editNameValue.value
+    }
+  } catch (e) { console.error(e) }
+  editingNameId.value = null
+}
+
+// ---- Ingredient Quantity Editing ----
+const startEditQty = async (ing) => {
+  editingQty.value = ing
+  editQtyValue.value = ing.quantity
+  await nextTick()
+  const inputs = qtyEditInput.value
+  if (Array.isArray(inputs) && inputs.length) inputs[0].select()
+  else if (inputs) inputs.select()
+}
+
+const saveIngredientQty = async (recipeId, ing) => {
+  if (!editQtyValue.value || editQtyValue.value <= 0 || editQtyValue.value === ing.quantity) {
+    editingQty.value = null
+    return
+  }
+  try {
+    const res = await fetch('http://localhost:8080/api/recipes/ingredients/edit', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recipe_id: recipeId, ingredient_id: ing.ingredient_id, quantity: editQtyValue.value })
+    })
+    if (res.ok) {
+      ing.quantity = editQtyValue.value
+      // Also update the pill tags
+      const recipe = recipes.value.find(r => r.id === recipeId)
+      if (recipe) {
+        const tagIng = (recipe._ingredients || []).find(i => i.ingredient_id === ing.ingredient_id)
+        if (tagIng) tagIng.quantity = editQtyValue.value
+      }
+    }
+  } catch (e) { console.error(e) }
+  editingQty.value = null
+}
+
+// ---- Existing functions ----
 const fetchRecipes = async () => {
     try {
         const res = await fetch('http://localhost:8080/api/recipes')
