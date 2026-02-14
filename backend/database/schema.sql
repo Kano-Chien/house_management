@@ -27,11 +27,28 @@ BEGIN
     END IF;
 END $$;
 
+-- Add is_tracked column if table already exists without it
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='ingredients' AND column_name='is_tracked') THEN
+        ALTER TABLE ingredients ADD COLUMN is_tracked BOOLEAN DEFAULT TRUE;
+    END IF;
+END $$;
+
 CREATE TABLE IF NOT EXISTS recipes (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
-    instructions TEXT
+    instructions TEXT,
+    notes TEXT DEFAULT ''
 );
+
+-- Add notes column if table already exists without it
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='recipes' AND column_name='notes') THEN
+        ALTER TABLE recipes ADD COLUMN notes TEXT DEFAULT '';
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS recipe_ingredients (
     recipe_id INTEGER REFERENCES recipes(id) ON DELETE CASCADE,
@@ -53,5 +70,13 @@ BEGIN
     IF EXISTS (SELECT 1 FROM information_schema.table_constraints WHERE constraint_name = 'meal_plan_meal_type_check') THEN
         ALTER TABLE meal_plan DROP CONSTRAINT meal_plan_meal_type_check;
         ALTER TABLE meal_plan ADD CONSTRAINT meal_plan_meal_type_check CHECK (meal_type IN ('Breakfast', 'Lunch', 'Dinner'));
+    END IF;
+END $$;
+
+-- Add is_cooked column if table already exists without it
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='meal_plan' AND column_name='is_cooked') THEN
+        ALTER TABLE meal_plan ADD COLUMN is_cooked BOOLEAN DEFAULT FALSE;
     END IF;
 END $$;

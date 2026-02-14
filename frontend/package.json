@@ -8,6 +8,10 @@
     "preview": "node node_modules/vite/bin/vite.js preview"
   },
   "dependencies": {
+    "@tiptap/extension-placeholder": "^3.19.0",
+    "@tiptap/starter-kit": "^3.19.0",
+    "@tiptap/vue-3": "^3.19.0",
+    "marked": "^17.0.2",
     "vue": "^3.3.4"
   },
   "devDependencies": {

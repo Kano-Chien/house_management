@@ -18,70 +18,30 @@ type LineNotifyHandler struct {
 
 func (h *LineNotifyHandler) SendShoppingList(w http.ResponseWriter, r *http.Request) {
 	// 1. Fetch shopping list data
-	query := `
-		WITH RequiredIngredients AS (
-			SELECT
-				ri.ingredient_id,
-				SUM(ri.quantity) as total_required
-			FROM recipe_ingredients ri
-			JOIN meal_plan mp ON ri.recipe_id = mp.recipe_id
-			GROUP BY ri.ingredient_id
-		)
-		SELECT
-			i.name,
-			(req.total_required - i.current_stock) as quantity_needed,
-			COALESCE(i.unit, '') as unit,
-			((req.total_required - i.current_stock) * COALESCE(i.price, 0)) as estimated_cost
-		FROM ingredients i
-		JOIN RequiredIngredients req ON i.id = req.ingredient_id
-		WHERE i.current_stock < req.total_required
-	`
+	// 1. Parse request body (list of items from frontend)
+	type RequestItem struct {
+		Name string `json:"name"`
+	}
+	var items []RequestItem
 
-	rows, err := h.DB.Query(query)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if err := json.NewDecoder(r.Body).Decode(&items); err != nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
-	defer rows.Close()
 
-	type ShoppingItem struct {
-		Name           string  `json:"name"`
-		QuantityNeeded float64 `json:"quantity_needed"`
-		Unit           string  `json:"unit"`
-		EstimatedCost  float64 `json:"estimated_cost"`
-	}
-
-	var items []ShoppingItem
-	var totalCost float64
-	for rows.Next() {
-		var item ShoppingItem
-		if err := rows.Scan(&item.Name, &item.QuantityNeeded, &item.Unit, &item.EstimatedCost); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		items = append(items, item)
-		totalCost += item.EstimatedCost
+	if len(items) == 0 {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "no_items", "message": "List is empty!"})
+		return
 	}
 
 	// 2. Build message text
-	if len(items) == 0 {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{"status": "no_items", "message": "Everything is in stock!"})
-		return
-	}
-
 	var sb strings.Builder
 	sb.WriteString("🛒 Shopping List\n")
 	sb.WriteString("━━━━━━━━━━━━━━━\n")
 	for _, item := range items {
-		line := fmt.Sprintf("• %s: %.0f %s", item.Name, item.QuantityNeeded, item.Unit)
-		if item.EstimatedCost > 0 {
-			line += fmt.Sprintf(" ($%.0f)", item.EstimatedCost)
-		}
-		sb.WriteString(line + "\n")
+		sb.WriteString(fmt.Sprintf("• %s\n", item.Name))
 	}
-	sb.WriteString("━━━━━━━━━━━━━━━\n")
-	sb.WriteString(fmt.Sprintf("💰 Total: $%.0f", totalCost))
 
 	// 3. Send via LINE Messaging API (Broadcast Message)
 	token := os.Getenv("LINE_CHANNEL_ACCESS_TOKEN")

@@ -11,32 +11,24 @@ type ShoppingListHandler struct {
 }
 
 type ShoppingItem struct {
-	Name           string  `json:"name"`
-	QuantityNeeded float64 `json:"quantity_needed"`
-	Unit           string  `json:"unit"`
-	EstimatedCost  float64 `json:"estimated_cost"`
+	Name          string  `json:"name"`
+	CurrentStock  float64 `json:"current_stock"`
+	Unit          string  `json:"unit"`
+	EstimatedCost float64 `json:"estimated_cost"`
 }
 
 func (h *ShoppingListHandler) GetShoppingList(w http.ResponseWriter, r *http.Request) {
-	// Query to find items where required quantity (from meal plan) > current stock
-	// This uses a CTE or subquery to sum up requirements first
+	// Show tracked items where stock is below threshold (3)
 	query := `
-		WITH RequiredIngredients AS (
-			SELECT 
-				ri.ingredient_id,
-				SUM(ri.quantity) as total_required
-			FROM recipe_ingredients ri
-			JOIN meal_plan mp ON ri.recipe_id = mp.recipe_id
-			GROUP BY ri.ingredient_id
-		)
-		SELECT 
+		SELECT
 			i.name,
-			(req.total_required - i.current_stock) as quantity_needed,
+			i.current_stock,
 			COALESCE(i.unit, '') as unit,
-			((req.total_required - i.current_stock) * COALESCE(i.price, 0)) as estimated_cost
+			COALESCE(i.price, 0) as estimated_cost
 		FROM ingredients i
-		JOIN RequiredIngredients req ON i.id = req.ingredient_id
-		WHERE i.current_stock < req.total_required
+		WHERE i.current_stock < 3
+		AND i.is_tracked = TRUE
+		ORDER BY i.current_stock ASC
 	`
 
 	rows, err := h.DB.Query(query)
@@ -49,7 +41,7 @@ func (h *ShoppingListHandler) GetShoppingList(w http.ResponseWriter, r *http.Req
 	var list []ShoppingItem
 	for rows.Next() {
 		var item ShoppingItem
-		if err := rows.Scan(&item.Name, &item.QuantityNeeded, &item.Unit, &item.EstimatedCost); err != nil {
+		if err := rows.Scan(&item.Name, &item.CurrentStock, &item.Unit, &item.EstimatedCost); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}

@@ -37,19 +37,19 @@
             <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Name</label>
             <input ref="nameInputRef" v-model="newItem.name" placeholder="e.g. Chicken, Soap..."
               @keyup.enter="addItem"
-              class="border border-gray-200 p-2 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition-all w-40" />
+              class="border border-gray-200 p-2 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition-all w-full md:w-40" />
           </div>
           <div class="flex flex-col gap-1">
             <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Stock</label>
             <input v-model.number="newItem.current_stock" type="number" placeholder="0"
               @keyup.enter="addItem"
-              class="border border-gray-200 p-2 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition-all w-20" />
+              class="border border-gray-200 p-2 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition-all w-full md:w-20" />
           </div>
           <div class="flex flex-col gap-1">
             <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Price</label>
             <input v-model.number="newItem.price" type="number" step="1" min="0" placeholder="$0"
               @keyup.enter="addItem"
-              class="border border-gray-200 p-2 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition-all w-20" />
+              class="border border-gray-200 p-2 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition-all w-full md:w-20" />
           </div>
           <div class="flex flex-col gap-1">
             <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Category</label>
@@ -61,7 +61,7 @@
           <button @click="addItem"
             :disabled="!newItem.name || adding"
             :class="[
-              'px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+              'px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 w-full md:w-auto',
               adding
                 ? 'bg-green-500 text-white scale-95'
                 : !newItem.name
@@ -75,7 +75,7 @@
     </Transition>
 
     <!-- Inventory Table -->
-    <div class="bg-white rounded-xl shadow overflow-hidden">
+    <div class="bg-white rounded-xl shadow overflow-x-auto">
       <table class="w-full text-left">
         <thead class="bg-gray-50">
             <tr>
@@ -177,13 +177,16 @@ const filterOptions = [
   { label: '🧴 Daily', value: 'daily' },
 ]
 const filteredInventory = computed(() => {
-  if (selectedCategory.value === 'all') return inventory.value
-  return inventory.value.filter(item => item.category === selectedCategory.value)
+  // Hide untracked items from inventory
+  const tracked = inventory.value.filter(item => item.is_tracked !== false)
+  
+  if (selectedCategory.value === 'all') return tracked
+  return tracked.filter(item => item.category === selectedCategory.value)
 })
 
 const fetchInventory = async () => {
     try {
-        const res = await fetch('http://localhost:8080/api/inventory')
+        const res = await fetch('/api/inventory')
         if (res.ok) {
             inventory.value = await res.json()
         }
@@ -196,7 +199,7 @@ const addItem = async () => {
     if (!newItem.value.name || adding.value) return
     adding.value = true
     try {
-        const res = await fetch('http://localhost:8080/api/inventory', {
+        const res = await fetch('/api/inventory', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(newItem.value)
@@ -224,7 +227,7 @@ const updateStock = async (item, change) => {
     if (newStock < 0) return
 
     try {
-        const res = await fetch('http://localhost:8080/api/inventory/stock', {
+        const res = await fetch('/api/inventory/stock', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: item.id, new_stock: newStock })
@@ -248,7 +251,7 @@ const cancelEdit = () => {
 
 const saveEdit = async (item) => {
     try {
-        const res = await fetch('http://localhost:8080/api/inventory/edit', {
+        const res = await fetch('/api/inventory/edit', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: item.id, ...editForm.value })
@@ -265,7 +268,7 @@ const saveEdit = async (item) => {
 const deleteItem = async (item) => {
     if (!confirm(`Delete "${item.name}"?`)) return
     try {
-        const res = await fetch('http://localhost:8080/api/inventory/delete', {
+        const res = await fetch('/api/inventory/delete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: item.id })

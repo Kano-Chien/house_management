@@ -66,9 +66,12 @@
         <!-- Card Body -->
         <div class="bg-white">
           <!-- Ingredient Tags (always visible) -->
-          <div class="px-5 pt-4 pb-3 flex flex-wrap gap-1.5 cursor-pointer" @click="toggleRecipe(recipe.id)">
-            <span v-for="ing in (recipe._ingredients || [])" :key="ing.ingredient_id"
-                  class="bg-gradient-to-r from-gray-50 to-gray-100 text-gray-600 px-3 py-1 rounded-full text-xs font-medium border border-gray-200 shadow-sm">
+          <div class="px-5 pt-4 pb-1 flex flex-wrap gap-1.5 cursor-pointer" @click="toggleRecipe(recipe.id)">
+            <span v-for="ing in sortedIngs(recipe._ingredients)" :key="ing.ingredient_id"
+                  :class="ing.is_tracked === false
+                    ? 'bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 border-amber-200'
+                    : 'bg-gradient-to-r from-gray-50 to-gray-100 text-gray-600 border-gray-200'"
+                  class="px-3 py-1 rounded-full text-xs font-medium border shadow-sm">
               {{ ing.name }} × {{ ing.quantity }}
             </span>
             <span v-if="!recipe._ingredients || recipe._ingredients.length === 0" class="text-gray-300 text-sm italic">
@@ -76,14 +79,15 @@
             </span>
           </div>
 
+
           <!-- Expanded Section -->
           <div v-if="expandedId === recipe.id" class="border-t border-gray-100 px-5 py-4">
             <!-- Ingredient List -->
             <div v-if="recipeIngredients.length > 0" class="mb-4 space-y-1">
-              <div v-for="ing in recipeIngredients" :key="ing.ingredient_id"
+              <div v-for="ing in sortedIngs(recipeIngredients)" :key="ing.ingredient_id"
                    class="flex justify-between items-center py-2 px-3 rounded-lg hover:bg-gray-50 transition-colors group/item">
                 <div class="flex items-center gap-2">
-                  <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+                  <span :class="ing.is_tracked === false ? 'bg-amber-400' : 'bg-emerald-400'" class="w-2 h-2 rounded-full"></span>
                   <span class="text-sm text-gray-700 font-medium">{{ ing.name }}</span>
 
                   <!-- Editable Quantity -->
@@ -120,10 +124,20 @@
                   @keyup.enter="addIngredientToRecipe(recipe.id)"
                   class="border-2 border-gray-200 p-2 rounded-lg text-sm w-16 text-center focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition-all" />
               </div>
+              <div class="flex items-center gap-2 mb-3">
+                <input type="checkbox" v-model="addIngForm.is_tracked" :id="'track-'+recipe.id" class="rounded text-blue-500 focus:ring-blue-400 w-4 h-4 cursor-pointer">
+                <label :for="'track-'+recipe.id" class="text-xs text-gray-500 font-medium cursor-pointer select-none">Track in Inventory</label>
+              </div>
               <button @click="addIngredientToRecipe(recipe.id)"
                 class="bg-gradient-to-r from-blue-500 to-indigo-500 text-white px-4 py-2 rounded-lg hover:from-blue-600 hover:to-indigo-600 transition-all text-sm font-semibold w-full shadow-md hover:shadow-lg active:scale-[0.98]">
                 + Add Ingredient
               </button>
+            </div>
+
+            <!-- Recipe Steps (Notion-like WYSIWYG) -->
+            <div class="mt-4 p-4 bg-blue-50/50 rounded-xl border border-blue-100">
+              <p class="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-2">📝 Recipe Steps</p>
+              <StepEditor v-model="recipe.notes" @blur="saveNotes(recipe)" />
             </div>
           </div>
         </div>
@@ -134,12 +148,23 @@
 
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
+import StepEditor from './StepEditor.vue'
 
 const recipes = ref([])
 const newRecipeName = ref('')
+
+// Sort tracked ingredients first, untracked last
+const sortedIngs = (ings) => {
+  if (!ings || !ings.length) return []
+  return [...ings].sort((a, b) => {
+    const aTracked = a.is_tracked !== false ? 0 : 1
+    const bTracked = b.is_tracked !== false ? 0 : 1
+    return aTracked - bTracked
+  })
+}
 const expandedId = ref(null)
 const recipeIngredients = ref([])
-const addIngForm = ref({ new_name: '', quantity: 1 })
+const addIngForm = ref({ new_name: '', quantity: 1, is_tracked: true })
 
 // Editing state
 const editingNameId = ref(null)
@@ -179,16 +204,26 @@ const saveRecipeName = async (recipe) => {
     return
   }
   try {
-    const res = await fetch('http://localhost:8080/api/recipes/edit', {
+    const res = await fetch('/api/recipes/edit', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: recipe.id, name: editNameValue.value })
+      body: JSON.stringify({ id: recipe.id, name: editNameValue.value, notes: recipe.notes || '' })
     })
     if (res.ok) {
       recipe.name = editNameValue.value
     }
   } catch (e) { console.error(e) }
   editingNameId.value = null
+}
+
+const saveNotes = async (recipe) => {
+  try {
+    await fetch('/api/recipes/edit', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: recipe.id, name: recipe.name, notes: recipe.notes || '' })
+    })
+  } catch (e) { console.error(e) }
 }
 
 // ---- Ingredient Quantity Editing ----
@@ -207,7 +242,7 @@ const saveIngredientQty = async (recipeId, ing) => {
     return
   }
   try {
-    const res = await fetch('http://localhost:8080/api/recipes/ingredients/edit', {
+    const res = await fetch('/api/recipes/ingredients/edit', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ recipe_id: recipeId, ingredient_id: ing.ingredient_id, quantity: editQtyValue.value })
@@ -228,12 +263,12 @@ const saveIngredientQty = async (recipeId, ing) => {
 // ---- Existing functions ----
 const fetchRecipes = async () => {
     try {
-        const res = await fetch('http://localhost:8080/api/recipes')
+        const res = await fetch('/api/recipes')
         if (res.ok) {
             const data = (await res.json()) || []
             for (const r of data) {
                 try {
-                    const ires = await fetch(`http://localhost:8080/api/recipes/ingredients?recipe_id=${r.id}`)
+                    const ires = await fetch(`/api/recipes/ingredients?recipe_id=${r.id}`)
                     if (ires.ok) r._ingredients = (await ires.json()) || []
                 } catch (e) { r._ingredients = [] }
             }
@@ -245,7 +280,7 @@ const fetchRecipes = async () => {
 const addRecipe = async () => {
     if (!newRecipeName.value) return
     try {
-        const res = await fetch('http://localhost:8080/api/recipes', {
+        const res = await fetch('/api/recipes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: newRecipeName.value })
@@ -260,7 +295,7 @@ const addRecipe = async () => {
 const deleteRecipe = async (recipe) => {
     if (!confirm(`Delete "${recipe.name}"?`)) return
     try {
-        const res = await fetch('http://localhost:8080/api/recipes/delete', {
+        const res = await fetch('/api/recipes/delete', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id: recipe.id })
@@ -283,7 +318,7 @@ const toggleRecipe = async (id) => {
 
 const fetchRecipeIngredients = async (recipeId) => {
     try {
-        const res = await fetch(`http://localhost:8080/api/recipes/ingredients?recipe_id=${recipeId}`)
+        const res = await fetch(`/api/recipes/ingredients?recipe_id=${recipeId}`)
         if (res.ok) recipeIngredients.value = (await res.json()) || []
     } catch (e) { console.error(e) }
 }
@@ -292,27 +327,28 @@ const addIngredientToRecipe = async (recipeId) => {
     if (!addIngForm.value.new_name) return
 
     try {
-        const res = await fetch('http://localhost:8080/api/recipes/ingredients', {
+        const res = await fetch('/api/recipes/ingredients', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 recipe_id: recipeId,
                 ingredient_name: addIngForm.value.new_name,
-                quantity: addIngForm.value.quantity
+                quantity: addIngForm.value.quantity,
+                is_tracked: addIngForm.value.is_tracked
             })
         })
         if (res.ok) {
             await fetchRecipeIngredients(recipeId)
             const recipe = recipes.value.find(r => r.id === recipeId)
             if (recipe) recipe._ingredients = [...recipeIngredients.value]
-            addIngForm.value = { new_name: '', quantity: 1 }
+            addIngForm.value = { new_name: '', quantity: 1, is_tracked: true }
         }
     } catch (e) { console.error(e) }
 }
 
 const removeIngredient = async (recipeId, ingredientId) => {
     try {
-        const res = await fetch('http://localhost:8080/api/recipes/ingredients/remove', {
+        const res = await fetch('/api/recipes/ingredients/remove', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ recipe_id: recipeId, ingredient_id: ingredientId })

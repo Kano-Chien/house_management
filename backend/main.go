@@ -161,6 +161,14 @@ func main() {
 		}
 	})
 
+	mux.HandleFunc("/api/mealplan/cook", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			mealPlanHandler.CookMeal(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	mux.HandleFunc("/api/shopping-list", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "GET" {
 			shoppingListHandler.GetShoppingList(w, r)

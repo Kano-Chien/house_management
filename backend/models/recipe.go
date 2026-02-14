@@ -4,6 +4,7 @@ type Recipe struct {
 	ID           int                `json:"id"`
 	Name         string             `json:"name"`
 	Instructions string             `json:"instructions"`
+	Notes        string             `json:"notes"`
 	Ingredients  []RecipeIngredient `json:"ingredients,omitempty"`
 }
 
