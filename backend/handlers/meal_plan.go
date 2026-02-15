@@ -3,7 +3,9 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/Kano-Chien/house_management/backend/models"
@@ -139,9 +141,17 @@ func (h *MealPlanHandler) CookMeal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 3. Decrement Inventory
-	// Only decrement for tracked ingredients
+	// Buffer the ingredient updates because we cannot interleave Exec with open Query rows on the same tx
+	type ingredientUpdate struct {
+		ID   int
+		Name string
+		Qty  float64
+	}
+	var updates []ingredientUpdate
+	var missingIngredients []string
+
 	rows, err := tx.Query(`
-		SELECT ri.ingredient_id, ri.quantity 
+		SELECT ri.ingredient_id, i.name, ri.quantity, i.current_stock
 		FROM recipe_ingredients ri
 		JOIN ingredients i ON ri.ingredient_id = i.id
 		WHERE ri.recipe_id = $1 AND i.is_tracked = TRUE
@@ -150,17 +160,35 @@ func (h *MealPlanHandler) CookMeal(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	defer rows.Close()
 
 	for rows.Next() {
-		var ingID int
-		var qty float64
-		if err := rows.Scan(&ingID, &qty); err != nil {
+		var u ingredientUpdate
+		var currentStock float64
+		if err := rows.Scan(&u.ID, &u.Name, &u.Qty, &currentStock); err != nil {
+			rows.Close()
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		// Decrease stock, allowing negative
-		_, err = tx.Exec("UPDATE ingredients SET current_stock = current_stock - $1 WHERE id = $2", qty, ingID)
+		if currentStock < u.Qty {
+			missingIngredients = append(missingIngredients, fmt.Sprintf("%s (Need: %.2f, Have: %.2f)", u.Name, u.Qty, currentStock))
+		}
+		updates = append(updates, u)
+	}
+	rows.Close()
+
+	if err := rows.Err(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if len(missingIngredients) > 0 {
+		http.Error(w, fmt.Sprintf("Not enough stock: %s", strings.Join(missingIngredients, ", ")), http.StatusConflict)
+		return
+	}
+
+	// Apply updates
+	for _, u := range updates {
+		_, err = tx.Exec("UPDATE ingredients SET current_stock = current_stock - $1 WHERE id = $2", u.Qty, u.ID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

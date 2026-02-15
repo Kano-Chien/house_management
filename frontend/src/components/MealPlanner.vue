@@ -39,24 +39,11 @@
                      class="group relative pl-1.5 pr-1 py-1 hover:bg-white/60 transition-colors rounded-md min-h-[1.75rem]">
                   
                   <!-- Meal Name -->
-                  <div class="text-xs font-medium leading-tight"
+                  <div class="text-xs font-medium leading-tight flex items-start gap-1"
                        :class="meal.is_cooked ? 'text-gray-400 font-normal line-through opacity-70' : 'text-gray-700'"
                        :title="meal.recipe_name">
-                    {{ meal.recipe_name }}
-                  </div>
-
-                  <!-- Status Icon (Always visible if cooked) -->
-                  <div v-if="meal.is_cooked" class="absolute top-1 right-1 text-xs opacity-50 grayscale cursor-default select-none">✅</div>
-
-                  <!-- Hover Actions (Overlay) -->
-                  <div class="absolute top-0.5 right-0.5 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity bg-white/95 rounded px-1 py-0.5 shadow-sm border border-gray-100 z-10">
-                    <!-- Cook Button -->
-                    <button v-if="!meal.is_cooked" @click.stop="cookMeal(meal)"
-                            class="text-sm hover:scale-110 leading-none text-amber-500 hover:text-amber-600 transition-transform" title="Mark as Cooked">🧑‍🍳</button>
-                    
-                    <!-- Delete Button -->
-                    <button @click.stop="deleteMeal(meal.id)"
-                            class="text-red-300 hover:text-red-500 text-xs font-bold px-1 leading-none transition-colors">✕</button>
+                    <span v-if="meal.is_cooked" class="select-none text-xs pt-0.5" title="Yummy!">😋</span>
+                    <span>{{ meal.recipe_name }}</span>
                   </div>
                 </div>
               </div>
@@ -91,8 +78,17 @@
             <div class="space-y-2 mb-2">
               <div v-for="meal in getMealsForEditor(type)" :key="'prod-'+meal.id"
                    class="flex items-center justify-between bg-gray-50 p-2 rounded-lg group">
-                <span class="text-sm font-medium text-gray-700 truncate flex-1" :class="{'line-through text-gray-400': meal.is_cooked}">{{ meal.recipe_name }}</span>
-                <button @click="markForRemoval(meal.id)" class="text-gray-400 hover:text-red-500 p-1">✕</button>
+                <div class="flex items-center gap-2 flex-1 min-w-0">
+                   <!-- Cook Button/Status -->
+                   <button v-if="!meal.is_cooked" @click.stop="cookMeal(meal)" 
+                           class="text-amber-500 hover:text-amber-600 hover:bg-amber-50 p-1 rounded transition-colors text-lg leading-none" 
+                           title="Cook this!">🍳</button>
+                   <span v-else class="text-lg leading-none select-none" title="Cooked">😋</span>
+                   
+                   <span class="text-sm font-medium text-gray-700 truncate" :class="{'line-through text-gray-400': meal.is_cooked}">{{ meal.recipe_name }}</span>
+                </div>
+                <!-- Delete -->
+                <button @click="markForRemoval(meal.id)" class="text-gray-300 hover:text-red-400 p-1 ml-2 transition-colors text-lg leading-none">🗑️</button>
               </div>
               
               <!-- Newly Added Meals (Pending Save) -->

@@ -103,6 +103,13 @@
                 <td class="p-3 text-gray-400">{{ item.planned_consumption }}</td>
                 <td class="p-3"><input v-model.number="editForm.price" type="number" step="1" min="0" class="border p-1 rounded-lg w-20 focus:ring-2 focus:ring-blue-400 focus:outline-none" /></td>
                 <td class="p-3">
+                  <div class="flex items-center gap-2">
+                     <label class="flex items-center gap-1 text-xs text-gray-500 cursor-pointer">
+                        <input type="checkbox" v-model="editForm.is_tracked" class="rounded text-blue-500 focus:ring-blue-400"> Track
+                     </label>
+                  </div>
+                </td>
+                <td class="p-3">
                     <div class="flex gap-1">
                     <button @click="saveEdit(item)" class="bg-green-500 text-white px-3 py-1 rounded-lg text-sm hover:bg-green-600 transition-colors">Save</button>
                     <button @click="cancelEdit" class="bg-gray-200 text-gray-600 px-3 py-1 rounded-lg text-sm hover:bg-gray-300 transition-colors">Cancel</button>
@@ -153,9 +160,9 @@
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 
 const inventory = ref([])
-const newItem = ref({ name: '', current_stock: 0, price: 0, category: 'food' })
+const newItem = ref({ name: '', current_stock: 0, price: 0, category: 'food', is_tracked: true })
 const editingId = ref(null)
-const editForm = ref({ name: '', current_stock: 0, price: 0, category: 'food' })
+const editForm = ref({ name: '', current_stock: 0, price: 0, category: 'food', is_tracked: true })
 const showAddForm = ref(false)
 const adding = ref(false)
 const justAdded = ref(null)
@@ -177,11 +184,11 @@ const filterOptions = [
   { label: '🧴 Daily', value: 'daily' },
 ]
 const filteredInventory = computed(() => {
-  // Hide untracked items from inventory
-  const tracked = inventory.value.filter(item => item.is_tracked !== false)
+  // Show all items, let user toggle tracking
+  const items = inventory.value
   
-  if (selectedCategory.value === 'all') return tracked
-  return tracked.filter(item => item.category === selectedCategory.value)
+  if (selectedCategory.value === 'all') return items
+  return items.filter(item => item.category === selectedCategory.value)
 })
 
 const fetchInventory = async () => {
@@ -211,7 +218,7 @@ const addItem = async () => {
             justAdded.value = added.id
             setTimeout(() => { justAdded.value = null }, 1500)
             // Reset form but keep category selection
-            newItem.value = { name: '', current_stock: 0, price: 0, category: newItem.value.category }
+            newItem.value = { name: '', current_stock: 0, price: 0, category: newItem.value.category, is_tracked: true }
             await nextTick()
             nameInputRef.value?.focus()
         }
