@@ -3,6 +3,7 @@ package handlers
 import (
 	"encoding/json"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -15,7 +16,7 @@ func UploadImage(w http.ResponseWriter, r *http.Request) {
 	// Parse multipart form with a max memory of 10MB
 	err := r.ParseMultipartForm(10 << 20)
 	if err != nil {
-		http.Error(w, "Failed to parse form: "+err.Error(), http.StatusBadRequest)
+		http.Error(w, "Failed to parse form", http.StatusBadRequest)
 		return
 	}
 
@@ -27,31 +28,43 @@ func UploadImage(w http.ResponseWriter, r *http.Request) {
 	}
 	defer file.Close()
 
+	// Validate MIME type — only allow safe image formats
+	allowedTypes := map[string]bool{
+		"image/jpeg": true,
+		"image/png":  true,
+		"image/gif":  true,
+		"image/webp": true,
+	}
+	contentType := handler.Header.Get("Content-Type")
+	if !allowedTypes[contentType] {
+		http.Error(w, "Only JPEG, PNG, GIF, and WebP images are allowed", http.StatusBadRequest)
+		return
+	}
+
 	// Ensure uploads directory exists
 	uploadDir := "./uploads"
 	err = os.MkdirAll(uploadDir, os.ModePerm)
 	if err != nil {
+		log.Printf("Could not create upload directory: %v", err)
 		http.Error(w, "Could not create upload directory", http.StatusInternalServerError)
 		return
 	}
 
-	// Create a unique filename to prevent overwriting
-	ext := filepath.Ext(handler.Filename)
-	if ext == "" {
-		ext = ".png" // default extension if none
-	}
-	// Basic sanitization
-	safeName := time.Now().Format("20060102150405") + "_" + strings.ReplaceAll(handler.Filename, " ", "_")
+	// Create a unique filename with safe base name to prevent path traversal
+	baseName := filepath.Base(handler.Filename)
+	safeName := time.Now().Format("20060102150405") + "_" + strings.ReplaceAll(baseName, " ", "_")
 	dstPath := filepath.Join(uploadDir, safeName)
 
 	dst, err := os.Create(dstPath)
 	if err != nil {
+		log.Printf("Could not save file: %v", err)
 		http.Error(w, "Could not save file", http.StatusInternalServerError)
 		return
 	}
 	defer dst.Close()
 
 	if _, err := io.Copy(dst, file); err != nil {
+		log.Printf("Could not save file content: %v", err)
 		http.Error(w, "Could not save file content", http.StatusInternalServerError)
 		return
 	}

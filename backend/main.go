@@ -250,8 +250,22 @@ func main() {
 }
 
 func enableCORS(next http.Handler) http.Handler {
+	allowedOrigins := os.Getenv("CORS_ALLOWED_ORIGINS")
+	if allowedOrigins == "" {
+		allowedOrigins = "*"
+	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
+		origin := r.Header.Get("Origin")
+		if allowedOrigins == "*" {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+		} else {
+			for _, o := range strings.Split(allowedOrigins, ",") {
+				if strings.TrimSpace(o) == origin {
+					w.Header().Set("Access-Control-Allow-Origin", origin)
+					break
+				}
+			}
+		}
 		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
 		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 
@@ -281,16 +295,21 @@ func (h spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// check whether a file exists or is a directory at the given path
 	fi, err := os.Stat(path)
-	if os.IsNotExist(err) || fi.IsDir() {
-		// file does not exist, serve index.html
-		http.ServeFile(w, r, filepath.Join(h.staticPath, h.indexPath))
+	if err != nil {
+		if os.IsNotExist(err) {
+			// file does not exist, serve index.html (SPA fallback)
+			http.ServeFile(w, r, filepath.Join(h.staticPath, h.indexPath))
+			return
+		}
+		// Other error (e.g. permission denied), return 500
+		log.Printf("Error stating file %s: %v", path, err)
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
 
-	if err != nil {
-		// if we got an error (that wasn't that the file doesn't exist) stating the
-		// file, return a 500 internal server error and stop
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	if fi.IsDir() {
+		// directory, serve index.html (SPA fallback)
+		http.ServeFile(w, r, filepath.Join(h.staticPath, h.indexPath))
 		return
 	}
 
