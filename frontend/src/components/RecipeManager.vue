@@ -88,7 +88,20 @@
                    class="flex justify-between items-center py-2 px-3 rounded-lg hover:bg-gray-50 transition-colors group/item">
                 <div class="flex items-center gap-2">
                   <span :class="ing.is_tracked === false ? 'bg-amber-400' : 'bg-emerald-400'" class="w-2 h-2 rounded-full"></span>
-                  <span class="text-sm text-gray-700 font-medium">{{ ing.name }}</span>
+                  
+                  <!-- Editable Name -->
+                  <span v-if="editingIngName && editingIngName.ingredient_id === ing.ingredient_id" class="flex items-center">
+                    <input v-model="editIngNameValue" type="text"
+                      ref="ingNameEditInput"
+                      @keyup.enter="saveIngredientName(recipe.id, ing)"
+                      @keyup.escape="editingIngName = null"
+                      @blur="saveIngredientName(recipe.id, ing)"
+                      class="border border-blue-300 rounded px-1.5 py-0.5 text-sm w-32 focus:ring-2 focus:ring-blue-400 focus:outline-none" />
+                  </span>
+                  <span v-else @click="startEditIngName(ing)"
+                    class="text-sm text-gray-700 font-medium cursor-pointer hover:text-blue-600 hover:bg-blue-50 px-1 py-0.5 rounded transition-all">
+                    {{ ing.name }}
+                  </span>
 
                   <!-- Editable Quantity -->
                   <span v-if="editingQty && editingQty.ingredient_id === ing.ingredient_id" class="flex items-center gap-1">
@@ -136,7 +149,13 @@
 
             <!-- Recipe Steps (Notion-like WYSIWYG) -->
             <div class="mt-4 p-4 bg-blue-50/50 rounded-xl border border-blue-100">
-              <p class="text-xs font-semibold text-blue-600 uppercase tracking-wider mb-2">📝 Recipe Steps</p>
+              <div class="flex justify-between items-center mb-2">
+                <p class="text-xs font-semibold text-blue-600 uppercase tracking-wider">📝 Recipe Steps</p>
+                <button @click="saveNotes(recipe)"
+                  class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-md text-xs font-medium shadow-sm transition-colors active:scale-95 flex items-center gap-1">
+                  <span>💾</span> Save
+                </button>
+              </div>
               <StepEditor v-model="recipe.notes" @blur="saveNotes(recipe)" />
             </div>
           </div>
@@ -171,8 +190,11 @@ const editingNameId = ref(null)
 const editNameValue = ref('')
 const editingQty = ref(null)
 const editQtyValue = ref(1)
+const editingIngName = ref(null)
+const editIngNameValue = ref('')
 const nameEditInput = ref(null)
 const qtyEditInput = ref(null)
+const ingNameEditInput = ref(null)
 
 const cardColors = [
   'bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600',
@@ -258,6 +280,40 @@ const saveIngredientQty = async (recipeId, ing) => {
     }
   } catch (e) { console.error(e) }
   editingQty.value = null
+}
+
+// ---- Ingredient Name Editing ----
+const startEditIngName = async (ing) => {
+  editingIngName.value = ing
+  editIngNameValue.value = ing.name
+  await nextTick()
+  const inputs = ingNameEditInput.value
+  if (Array.isArray(inputs) && inputs.length) inputs[0].focus()
+  else if (inputs) inputs.focus()
+}
+
+const saveIngredientName = async (recipeId, ing) => {
+  if (!editIngNameValue.value || editIngNameValue.value === ing.name) {
+    editingIngName.value = null
+    return
+  }
+  try {
+    const res = await fetch('/api/recipes/ingredients/replace', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+        recipe_id: recipeId, 
+        old_ingredient_id: ing.ingredient_id, 
+        new_name: editIngNameValue.value 
+      })
+    })
+    if (res.ok) {
+      await fetchRecipeIngredients(recipeId)
+      const recipe = recipes.value.find(r => r.id === recipeId)
+      if (recipe) recipe._ingredients = [...recipeIngredients.value]
+    }
+  } catch (e) { console.error(e) }
+  editingIngName.value = null
 }
 
 // ---- Existing functions ----

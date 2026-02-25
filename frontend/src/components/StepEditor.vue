@@ -1,20 +1,37 @@
 <template>
-  <div class="step-editor" @click="focusEditor">
-    <editor-content :editor="editor" />
+  <div class="step-editor select-none flex flex-col">
+    <!-- Toolbar -->
+    <div class="flex items-center gap-2 p-2 border-b border-blue-100 bg-white/50 rounded-t-lg">
+      <button @click="triggerImageUpload" title="Insert Image"
+        class="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors flex items-center justify-center">
+        <span class="text-lg leading-none">🖼️</span>
+      </button>
+      <input type="file" ref="fileInput" accept="image/*" class="hidden" @change="handleFileUpload" />
+      <span v-if="uploading" class="text-xs text-blue-500 font-medium ml-2 animate-pulse">Uploading...</span>
+    </div>
+    
+    <!-- Editor Area -->
+    <div @click="focusEditor" class="flex-1 cursor-text" @drop.prevent="handleDrop" @dragover.prevent>
+      <editor-content :editor="editor" />
+    </div>
   </div>
 </template>
 
 <script setup>
-import { watch, onBeforeUnmount } from 'vue'
+import { ref, watch, onBeforeUnmount } from 'vue'
 import { useEditor, EditorContent } from '@tiptap/vue-3'
 import StarterKit from '@tiptap/starter-kit'
 import Placeholder from '@tiptap/extension-placeholder'
+import Image from '@tiptap/extension-image'
 
 const props = defineProps({
   modelValue: { type: String, default: '' }
 })
 
 const emit = defineEmits(['update:modelValue', 'blur'])
+
+const fileInput = ref(null)
+const uploading = ref(false)
 
 const editor = useEditor({
   content: props.modelValue || '',
@@ -23,12 +40,17 @@ const editor = useEditor({
       heading: { levels: [1, 2, 3] },
     }),
     Placeholder.configure({
-      placeholder: 'Type your recipe steps here... Use markdown shortcuts like "1. " or "- "',
+      placeholder: 'Type your recipe steps here... Use markdown shortcuts like "1. " or "- ". Drag and drop images.',
+    }),
+    Image.configure({
+      HTMLAttributes: {
+        class: 'rounded-lg max-w-full h-auto shadow-sm my-4 border border-gray-100',
+      },
     }),
   ],
   editorProps: {
     attributes: {
-      class: 'prose-editor focus:outline-none min-h-[60px] p-3 text-sm text-gray-700',
+      class: 'prose-editor focus:outline-none min-h-[100px] p-4 text-sm text-gray-700',
     },
   },
   onUpdate({ editor }) {
@@ -51,6 +73,61 @@ const focusEditor = () => {
   if (editor.value) editor.value.commands.focus()
 }
 
+// ---- Image Upload Handling ----
+const triggerImageUpload = () => {
+  if (fileInput.value) fileInput.value.click()
+}
+
+const uploadToServer = async (file) => {
+  if (!file || !file.type.startsWith('image/')) return null
+  
+  const formData = new FormData()
+  formData.append('image', file)
+  
+  try {
+    uploading.value = true
+    const res = await fetch('/api/upload', {
+      method: 'POST',
+      body: formData
+    })
+    
+    if (res.ok) {
+      const data = await res.json()
+      return data.url
+    }
+    return null
+  } catch (e) {
+    console.error('Image upload failed', e)
+    return null
+  } finally {
+    uploading.value = false
+  }
+}
+
+const handleFileUpload = async (e) => {
+  const file = e.target.files[0]
+  if (!file) return
+  
+  const url = await uploadToServer(file)
+  if (url && editor.value) {
+    editor.value.chain().focus().setImage({ src: url }).run()
+  }
+  
+  // Reset input
+  if (fileInput.value) fileInput.value.value = ''
+}
+
+const handleDrop = async (e) => {
+  e.preventDefault()
+  if (!e.dataTransfer || !e.dataTransfer.files.length) return
+  
+  const file = e.dataTransfer.files[0]
+  const url = await uploadToServer(file)
+  if (url && editor.value) {
+    editor.value.chain().focus().setImage({ src: url }).run()
+  }
+}
+
 onBeforeUnmount(() => {
   if (editor.value) editor.value.destroy()
 })
@@ -71,8 +148,15 @@ onBeforeUnmount(() => {
 
 /* Editor content styles */
 .step-editor :deep(.ProseMirror) {
-  min-height: 60px;
+  min-height: 100px;
   outline: none;
+}
+.step-editor :deep(.ProseMirror img) {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: 0.5rem;
+  margin: 1rem auto;
 }
 .step-editor :deep(.ProseMirror p.is-editor-empty:first-child::before) {
   content: attr(data-placeholder);
