@@ -13,9 +13,7 @@ type RecipeHandler struct {
 }
 
 func (h *RecipeHandler) GetRecipes(w http.ResponseWriter, r *http.Request) {
-	// Simple fetch for listing. Detailed fetch with ingredients could be separate or joined.
-	// For MVP, letting's just fetch basic info.
-	rows, err := h.DB.Query("SELECT id, name, instructions, COALESCE(notes, '') as notes FROM recipes")
+	rows, err := h.DB.Query("SELECT id, name, COALESCE(notes, '') as notes FROM recipes")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -25,7 +23,7 @@ func (h *RecipeHandler) GetRecipes(w http.ResponseWriter, r *http.Request) {
 	var recipes []models.Recipe
 	for rows.Next() {
 		var r models.Recipe
-		if err := rows.Scan(&r.ID, &r.Name, &r.Instructions, &r.Notes); err != nil {
+		if err := rows.Scan(&r.ID, &r.Name, &r.Notes); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -51,7 +49,7 @@ func (h *RecipeHandler) CreateRecipe(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	var recipeID int
-	res, err := tx.Exec("INSERT INTO recipes (name, instructions) VALUES (?, ?)", req.Name, req.Instructions)
+	res, err := tx.Exec("INSERT INTO recipes (name) VALUES (?)", req.Name)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -99,7 +97,7 @@ func (h *RecipeHandler) GetRecipeIngredients(w http.ResponseWriter, r *http.Requ
 	}
 
 	rows, err := h.DB.Query(`
-		SELECT ri.ingredient_id, i.name, ri.quantity, COALESCE(i.unit, '') as unit, COALESCE(i.price, 0) as price, i.is_tracked
+		SELECT ri.ingredient_id, i.name, ri.quantity, COALESCE(i.price, 0) as price, i.is_tracked
 		FROM recipe_ingredients ri
 		JOIN ingredients i ON ri.ingredient_id = i.id
 		WHERE ri.recipe_id = ?
@@ -113,8 +111,7 @@ func (h *RecipeHandler) GetRecipeIngredients(w http.ResponseWriter, r *http.Requ
 	type IngredientDetail struct {
 		IngredientID int     `json:"ingredient_id"`
 		Name         string  `json:"name"`
-		Quantity     float64 `json:"quantity"`
-		Unit         string  `json:"unit"`
+		Quantity     int     `json:"quantity"`
 		Price        float64 `json:"price"`
 		IsTracked    bool    `json:"is_tracked"`
 	}
@@ -122,7 +119,7 @@ func (h *RecipeHandler) GetRecipeIngredients(w http.ResponseWriter, r *http.Requ
 	var ingredients []IngredientDetail
 	for rows.Next() {
 		var ing IngredientDetail
-		if err := rows.Scan(&ing.IngredientID, &ing.Name, &ing.Quantity, &ing.Unit, &ing.Price, &ing.IsTracked); err != nil {
+		if err := rows.Scan(&ing.IngredientID, &ing.Name, &ing.Quantity, &ing.Price, &ing.IsTracked); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -135,11 +132,11 @@ func (h *RecipeHandler) GetRecipeIngredients(w http.ResponseWriter, r *http.Requ
 
 func (h *RecipeHandler) AddRecipeIngredient(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		RecipeID       int     `json:"recipe_id"`
-		IngredientID   int     `json:"ingredient_id"`
-		IngredientName string  `json:"ingredient_name"`
-		Quantity       float64 `json:"quantity"`
-		IsTracked      *bool   `json:"is_tracked"` // Optional, default true
+		RecipeID       int    `json:"recipe_id"`
+		IngredientID   int    `json:"ingredient_id"`
+		IngredientName string `json:"ingredient_name"`
+		Quantity       int    `json:"quantity"`
+		IsTracked      *bool  `json:"is_tracked"` // Optional, default true
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -162,7 +159,7 @@ func (h *RecipeHandler) AddRecipeIngredient(w http.ResponseWriter, r *http.Reque
 			}
 
 			res, err := h.DB.Exec(
-				"INSERT INTO ingredients (name, current_stock, price, is_tracked) VALUES (?, 0, NULL, ?)",
+				"INSERT INTO ingredients (name, current_stock, price, is_tracked) VALUES (?, 0, 0, ?)",
 				req.IngredientName, isTracked,
 			)
 			if err != nil {
@@ -270,9 +267,9 @@ func (h *RecipeHandler) UpdateRecipeName(w http.ResponseWriter, r *http.Request)
 
 func (h *RecipeHandler) UpdateIngredientQuantity(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		RecipeID     int     `json:"recipe_id"`
-		IngredientID int     `json:"ingredient_id"`
-		Quantity     float64 `json:"quantity"`
+		RecipeID     int `json:"recipe_id"`
+		IngredientID int `json:"ingredient_id"`
+		Quantity     int `json:"quantity"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)

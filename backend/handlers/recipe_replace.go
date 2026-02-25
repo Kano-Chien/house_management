@@ -32,7 +32,7 @@ func (h *RecipeHandler) ReplaceRecipeIngredient(w http.ResponseWriter, r *http.R
 	defer tx.Rollback()
 
 	// 1. Get existing quantity for the old ingredient in this recipe
-	var quantity float64
+	var quantity int
 	err = tx.QueryRow("SELECT quantity FROM recipe_ingredients WHERE recipe_id = ? AND ingredient_id = ?", req.RecipeID, req.OldIngredientID).Scan(&quantity)
 	if err != nil {
 		http.Error(w, "ingredient not found in recipe", http.StatusNotFound)
@@ -45,7 +45,7 @@ func (h *RecipeHandler) ReplaceRecipeIngredient(w http.ResponseWriter, r *http.R
 
 	if err == sql.ErrNoRows {
 		// Case A: The new name does NOT exist in the inventory.
-		// We just rename the existing ingredient globally.
+		// Rename the ingredient globally — ingredients are a shared concept across all recipes.
 		_, err := tx.Exec("UPDATE ingredients SET name = ? WHERE id = ?", req.NewName, req.OldIngredientID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

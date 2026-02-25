@@ -1,15 +1,12 @@
 package models
 
-import "time"
-
 type Ingredient struct {
-	ID                 int        `json:"id"`
-	Name               string     `json:"name"`
-	CurrentStock       float64    `json:"current_stock"`
-	Unit               string     `json:"unit"`
-	ExpiryDate         *time.Time `json:"expiry_date,omitempty"` // Pointer to allow null
-	Price              float64    `json:"price"`
-	Category           string     `json:"category"`
-	IsTracked          bool       `json:"is_tracked"`
-	PlannedConsumption float64    `json:"planned_consumption"` // Calculated, not stored directly
+	ID                 int     `json:"id"`
+	Name               string  `json:"name"`
+	CurrentStock       int     `json:"current_stock"`
+	MinStock           int     `json:"min_stock"`
+	Price              float64 `json:"price"`
+	Category           string  `json:"category"`
+	IsTracked          bool    `json:"is_tracked"`
+	PlannedConsumption int     `json:"planned_consumption"` // Calculated, not stored directly
 }

@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/Kano-Chien/house_management/backend/models"
@@ -13,10 +14,10 @@ type InventoryHandler struct {
 }
 
 func (h *InventoryHandler) GetInventory(w http.ResponseWriter, r *http.Request) {
-	// Query includes calculation for planned consumption based on future meals
 	query := `
 		SELECT
-			i.id, i.name, i.current_stock, COALESCE(i.unit, '') as unit, i.expiry_date, COALESCE(i.price, 0) as price,
+			i.id, i.name, i.current_stock, COALESCE(i.min_stock, 3) as min_stock,
+			COALESCE(i.price, 0) as price,
 			COALESCE(i.category, 'food') as category,
 			i.is_tracked,
 			COALESCE((
@@ -30,7 +31,8 @@ func (h *InventoryHandler) GetInventory(w http.ResponseWriter, r *http.Request) 
 	`
 	rows, err := h.DB.Query(query)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		log.Printf("Error querying inventory: %v", err)
+		http.Error(w, "Failed to fetch inventory", http.StatusInternalServerError)
 		return
 	}
 	defer rows.Close()
@@ -38,9 +40,9 @@ func (h *InventoryHandler) GetInventory(w http.ResponseWriter, r *http.Request) 
 	var inventory []models.Ingredient
 	for rows.Next() {
 		var i models.Ingredient
-		// Use sql.NullFloat64 or similar if needed, but COALESCE handles nulls
-		if err := rows.Scan(&i.ID, &i.Name, &i.CurrentStock, &i.Unit, &i.ExpiryDate, &i.Price, &i.Category, &i.IsTracked, &i.PlannedConsumption); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+		if err := rows.Scan(&i.ID, &i.Name, &i.CurrentStock, &i.MinStock, &i.Price, &i.Category, &i.IsTracked, &i.PlannedConsumption); err != nil {
+			log.Printf("Error scanning inventory item: %v", err)
+			http.Error(w, "Failed to read inventory", http.StatusInternalServerError)
 			return
 		}
 		inventory = append(inventory, i)
@@ -61,8 +63,8 @@ func (h *InventoryHandler) AddIngredient(w http.ResponseWriter, r *http.Request)
 		i.Category = "food"
 	}
 	res, err := h.DB.Exec(
-		"INSERT INTO ingredients (name, current_stock, unit, expiry_date, price, category, is_tracked) VALUES (?, ?, ?, ?, ?, ?, ?)",
-		i.Name, i.CurrentStock, i.Unit, i.ExpiryDate, i.Price, i.Category, i.IsTracked,
+		"INSERT INTO ingredients (name, current_stock, price, category, is_tracked, min_stock) VALUES (?, ?, ?, ?, ?, ?)",
+		i.Name, i.CurrentStock, i.Price, i.Category, i.IsTracked, i.MinStock,
 	)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -82,8 +84,8 @@ func (h *InventoryHandler) AddIngredient(w http.ResponseWriter, r *http.Request)
 
 func (h *InventoryHandler) UpdateStock(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ID       int     `json:"id"`
-		NewStock float64 `json:"new_stock"`
+		ID       int `json:"id"`
+		NewStock int `json:"new_stock"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, err.Error(), http.StatusBadRequest)
@@ -110,7 +112,7 @@ func (h *InventoryHandler) EditIngredient(w http.ResponseWriter, r *http.Request
 	var req struct {
 		ID        int     `json:"id"`
 		Name      string  `json:"name"`
-		Stock     float64 `json:"current_stock"`
+		Stock     int     `json:"current_stock"`
 		Price     float64 `json:"price"`
 		Category  string  `json:"category"`
 		IsTracked bool    `json:"is_tracked"`

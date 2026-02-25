@@ -16,9 +16,8 @@ type MealPlanHandler struct {
 }
 
 func (h *MealPlanHandler) GetMealPlan(w http.ResponseWriter, r *http.Request) {
-	// Optional: Filter by date range query params ?start=...&end=...
 	rows, err := h.DB.Query(`
-		SELECT mp.id, mp.date, mp.meal_type, mp.recipe_id, r.name, COALESCE(mp.is_cooked, FALSE)
+		SELECT mp.id, mp.date, mp.meal_type, mp.recipe_id, r.name, COALESCE(mp.custom_name, ''), COALESCE(mp.is_cooked, FALSE)
 		FROM meal_plan mp 
 		LEFT JOIN recipes r ON mp.recipe_id = r.id
 		ORDER BY mp.date, mp.meal_type
@@ -34,17 +33,15 @@ func (h *MealPlanHandler) GetMealPlan(w http.ResponseWriter, r *http.Request) {
 		var mp models.MealPlan
 		var dateStr string
 		var rName sql.NullString
-		if err := rows.Scan(&mp.ID, &dateStr, &mp.MealType, &mp.RecipeID, &rName, &mp.IsCooked); err != nil {
+		if err := rows.Scan(&mp.ID, &dateStr, &mp.MealType, &mp.RecipeID, &rName, &mp.CustomName, &mp.IsCooked); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		// Parse the date string from SQLite
-		parsedDate, err := time.Parse("2006-01-02", dateStr[:10]) // Take first 10 chars just in case
+		parsedDate, err := time.Parse("2006-01-02", dateStr[:10])
 		if err == nil {
 			mp.Date = parsedDate
 		} else {
-			// Fallback or log error, but keep going?
-			// Try RFC3339 just in case
 			if parsedDate, err := time.Parse(time.RFC3339, dateStr); err == nil {
 				mp.Date = parsedDate
 			}
@@ -61,12 +58,11 @@ func (h *MealPlanHandler) GetMealPlan(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MealPlanHandler) ScheduleMeal(w http.ResponseWriter, r *http.Request) {
-	// Fix date parsing if JSON sends string, but let's assume standard ISO8601 handled by Go's JSON parser to time.Time if format matches
-	// Or use a custom struct for decoding
 	type Request struct {
-		Date     string `json:"date"` // YYYY-MM-DD
-		MealType string `json:"meal_type"`
-		RecipeID *int   `json:"recipe_id"`
+		Date       string `json:"date"` // YYYY-MM-DD
+		MealType   string `json:"meal_type"`
+		RecipeID   *int   `json:"recipe_id"`
+		CustomName string `json:"custom_name"`
 	}
 	var input Request
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -81,7 +77,8 @@ func (h *MealPlanHandler) ScheduleMeal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var id int
-	res, err := h.DB.Exec("INSERT INTO meal_plan (date, meal_type, recipe_id) VALUES (?, ?, ?)", date.Format("2006-01-02"), input.MealType, input.RecipeID)
+	res, err := h.DB.Exec("INSERT INTO meal_plan (date, meal_type, recipe_id, custom_name) VALUES (?, ?, ?, ?)",
+		date.Format("2006-01-02"), input.MealType, input.RecipeID, input.CustomName)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -160,11 +157,10 @@ func (h *MealPlanHandler) CookMeal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 3. Decrement Inventory
-	// Buffer the ingredient updates because we cannot interleave Exec with open Query rows on the same tx
 	type ingredientUpdate struct {
 		ID   int
 		Name string
-		Qty  float64
+		Qty  int
 	}
 	var updates []ingredientUpdate
 	var missingIngredients []string
@@ -182,14 +178,14 @@ func (h *MealPlanHandler) CookMeal(w http.ResponseWriter, r *http.Request) {
 
 	for rows.Next() {
 		var u ingredientUpdate
-		var currentStock float64
+		var currentStock int
 		if err := rows.Scan(&u.ID, &u.Name, &u.Qty, &currentStock); err != nil {
 			rows.Close()
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		if currentStock < u.Qty {
-			missingIngredients = append(missingIngredients, fmt.Sprintf("%s (Need: %.2f, Have: %.2f)", u.Name, u.Qty, currentStock))
+			missingIngredients = append(missingIngredients, fmt.Sprintf("%s (Need: %d, Have: %d)", u.Name, u.Qty, currentStock))
 		}
 		updates = append(updates, u)
 	}
