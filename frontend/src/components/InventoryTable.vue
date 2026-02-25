@@ -249,7 +249,7 @@ const updateStock = async (item, change) => {
 
 const startEdit = (item) => {
     editingId.value = item.id
-    editForm.value = { name: item.name, current_stock: item.current_stock, price: item.price, category: item.category || 'food' }
+    editForm.value = { name: item.name, current_stock: item.current_stock, price: item.price, category: item.category || 'food', is_tracked: item.is_tracked }
 }
 
 const cancelEdit = () => {

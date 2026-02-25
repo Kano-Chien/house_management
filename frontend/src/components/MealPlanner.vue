@@ -41,9 +41,9 @@
                   <!-- Meal Name -->
                   <div class="text-xs font-medium leading-tight flex items-start gap-1"
                        :class="meal.is_cooked ? 'text-gray-400 font-normal line-through opacity-70' : 'text-gray-700'"
-                       :title="meal.recipe_name">
+                       :title="meal.recipe_name || meal.custom_name">
                     <span v-if="meal.is_cooked" class="select-none text-xs pt-0.5" title="Yummy!">😋</span>
-                    <span>{{ meal.recipe_name }}</span>
+                    <span>{{ meal.recipe_name || meal.custom_name || 'Unnamed' }}</span>
                   </div>
                 </div>
               </div>
@@ -85,7 +85,7 @@
                            title="Cook this!">🍳</button>
                    <span v-else class="text-lg leading-none select-none" title="Cooked">😋</span>
                    
-                   <span class="text-sm font-medium text-gray-700 truncate" :class="{'line-through text-gray-400': meal.is_cooked}">{{ meal.recipe_name }}</span>
+                   <span class="text-sm font-medium text-gray-700 truncate" :class="{'line-through text-gray-400': meal.is_cooked}">{{ meal.recipe_name || meal.custom_name || 'Unnamed' }}</span>
                 </div>
                 <!-- Delete -->
                 <button @click="markForRemoval(meal.id)" class="text-gray-300 hover:text-red-400 p-1 ml-2 transition-colors text-lg leading-none">🗑️</button>
@@ -189,7 +189,9 @@ const weekLabel = computed(() => {
 const getMealsForDay = (dateStr) => {
   return mealPlan.value
     .filter(m => {
-      const mDate = new Date(m.date).toISOString().split('T')[0]
+      // Parse to local date string to avoid UTC offset issues
+      const d = new Date(m.date)
+      const mDate = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`
       return mDate === dateStr
     })
     .sort((a, b) => {
@@ -289,17 +291,7 @@ const saveChanges = async () => {
   }
 }
 
-const deleteMeal = async (id) => {
-  if(!confirm('Delete this meal?')) return
-  try {
-    const res = await fetch('/api/mealplan/delete', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id })
-    })
-    if (res.ok) await fetchMealPlan()
-  } catch (e) { console.error(e) }
-}
+
 
 const cookMeal = async (meal) => {
   if (!confirm(`Mark "${meal.recipe_name}" as cooked? This will deduct ingredients from inventory.`)) return

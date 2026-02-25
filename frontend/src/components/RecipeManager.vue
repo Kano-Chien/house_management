@@ -119,7 +119,6 @@
                   </span>
 
                   <span v-if="ing.price" class="text-xs text-emerald-500 font-medium">${{ (ing.price * ing.quantity).toFixed(0) }}</span>
-                  <span v-if="ing.unit" class="text-xs text-gray-300">{{ ing.unit }}</span>
                 </div>
                 <button @click="removeIngredient(recipe.id, ing.ingredient_id)"
                   class="opacity-0 group-hover/item:opacity-100 text-red-400 hover:text-red-600 transition-all text-lg leading-none">×</button>
@@ -322,12 +321,13 @@ const fetchRecipes = async () => {
         const res = await fetch('/api/recipes')
         if (res.ok) {
             const data = (await res.json()) || []
-            for (const r of data) {
+            // Fetch all ingredients in parallel instead of sequentially (N+1 → 1+N parallel)
+            await Promise.all(data.map(async (r) => {
                 try {
                     const ires = await fetch(`/api/recipes/ingredients?recipe_id=${r.id}`)
                     if (ires.ok) r._ingredients = (await ires.json()) || []
                 } catch (e) { r._ingredients = [] }
-            }
+            }))
             recipes.value = data
         }
     } catch (e) { console.error(e) }
