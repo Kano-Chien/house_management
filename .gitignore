@@ -37,3 +37,10 @@ backend/uploads/
 # SSH Keys (accidentally placed in frontend/)
 frontend/yes
 frontend/yes.pub
+
+# Backups
+backups/
+
+# agent context
+.agent/
+
