@@ -1,0 +1,26 @@
+[Unit]
+Description=House Management Go Backend
+After=network.target
+
+[Service]
+Type=simple
+# Your username on the Raspberry Pi
+User=kano
+Group=kano
+
+# Set the working directory to where your backend executable is located on the Pi
+WorkingDirectory=/home/kano/house_management
+
+# Execute the compiled Go binary
+ExecStart=/home/kano/house_management/backend_pi
+
+# Always restart if the program crashes or is killed
+Restart=always
+# Wait 5 seconds before restarting
+RestartSec=5
+
+# You can set environment variables here
+Environment="PORT=8080"
+
+[Install]
+WantedBy=multi-user.target
