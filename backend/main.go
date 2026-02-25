@@ -3,26 +3,31 @@ package main
 import (
 	"bufio"
 	"database/sql"
+	_ "embed"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/Kano-Chien/house_management/backend/handlers"
-	_ "github.com/lib/pq"
+	_ "modernc.org/sqlite"
 )
+
+//go:embed database/schema_sqlite.sql
+var schemaSQL string
 
 func main() {
 	loadEnv(".env")
 
-	// Database connection string
-	connStr := os.Getenv("DATABASE_URL")
-	if connStr == "" {
-		connStr = "user=house_user password=house_pass dbname=house_management sslmode=disable"
+	// Database connection string (file path for SQLite)
+	dbPath := os.Getenv("DATABASE_URL")
+	if dbPath == "" {
+		dbPath = "house.db"
 	}
 
-	db, err := sql.Open("postgres", connStr)
+	db, err := sql.Open("sqlite", dbPath)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -33,12 +38,17 @@ func main() {
 	}
 	fmt.Println("Connected to the database successfully.")
 
-	// Execute Schema
-	schemaContent, err := os.ReadFile("database/schema.sql")
-	if err != nil {
-		log.Fatal("Error reading schema file:", err)
+	// Enable Foreign Keys and WAL mode for SQLite
+	if _, err := db.Exec("PRAGMA foreign_keys = ON; PRAGMA journal_mode = WAL;"); err != nil {
+		log.Fatal("Failed to enable foreign keys or WAL mode:", err)
 	}
-	if _, err := db.Exec(string(schemaContent)); err != nil {
+
+	// Avoid "database is locked" errors by limiting to one connection
+	// This serializes all db access which is fine for this scale and Pi Zero
+	db.SetMaxOpenConns(1)
+
+	// Execute Schema
+	if _, err := db.Exec(schemaSQL); err != nil {
 		log.Fatal("Error executing schema:", err)
 	}
 	fmt.Println("Database schema applied successfully.")
@@ -142,6 +152,14 @@ func main() {
 		}
 	})
 
+	mux.HandleFunc("/api/recipes/ingredients/replace", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			recipeHandler.ReplaceRecipeIngredient(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	mux.HandleFunc("/api/mealplan", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":
@@ -170,8 +188,27 @@ func main() {
 	})
 
 	mux.HandleFunc("/api/shopping-list", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == "GET" {
+		switch r.Method {
+		case "GET":
 			shoppingListHandler.GetShoppingList(w, r)
+		case "POST":
+			shoppingListHandler.AddCustomItem(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/shopping-list/check", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "PUT" {
+			shoppingListHandler.ToggleItemChecked(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/shopping-list/delete", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			shoppingListHandler.DeleteItem(w, r)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -185,6 +222,22 @@ func main() {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
 	})
+
+	mux.HandleFunc("/api/upload", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			handlers.UploadImage(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	// Serve the static uploads directory
+	uploadsDir := http.Dir("./uploads")
+	mux.Handle("/uploads/", http.StripPrefix("/uploads/", http.FileServer(uploadsDir)))
+
+	// Register SPA Handler
+	spa := spaHandler{staticPath: "./dist", indexPath: "index.html"}
+	mux.Handle("/", spa)
 
 	handler := enableCORS(mux)
 
@@ -209,6 +262,40 @@ func enableCORS(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r)
 	})
+}
+
+// spaHandler implements the http.Handler interface, so we can use it
+// to respond to HTTP requests. The path to the static directory and
+// error helper logic are encapsulated in this connection.
+type spaHandler struct {
+	staticPath string
+	indexPath  string
+}
+
+// ServeHTTP inspects the URL path to locate a file within the static dir
+// on the SPA handler. If a file is found, it will be served. If not, the
+// file located at the index path on the SPA handler will be served.
+func (h spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// join internally call path.Clean to prevent directory traversal
+	path := filepath.Join(h.staticPath, r.URL.Path)
+
+	// check whether a file exists or is a directory at the given path
+	fi, err := os.Stat(path)
+	if os.IsNotExist(err) || fi.IsDir() {
+		// file does not exist, serve index.html
+		http.ServeFile(w, r, filepath.Join(h.staticPath, h.indexPath))
+		return
+	}
+
+	if err != nil {
+		// if we got an error (that wasn't that the file doesn't exist) stating the
+		// file, return a 500 internal server error and stop
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	// otherwise, use http.FileServer to serve the static file
+	http.FileServer(http.Dir(h.staticPath)).ServeHTTP(w, r)
 }
 func loadEnv(path string) {
 	fmt.Printf("Loading .env from: %s\n", path)
