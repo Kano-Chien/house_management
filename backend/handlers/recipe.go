@@ -51,15 +51,21 @@ func (h *RecipeHandler) CreateRecipe(w http.ResponseWriter, r *http.Request) {
 	defer tx.Rollback()
 
 	var recipeID int
-	err = tx.QueryRow("INSERT INTO recipes (name, instructions) VALUES ($1, $2) RETURNING id", req.Name, req.Instructions).Scan(&recipeID)
+	res, err := tx.Exec("INSERT INTO recipes (name, instructions) VALUES (?, ?)", req.Name, req.Instructions)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	recipeID = int(id)
 
 	// Insert ingredients if provided
 	if len(req.Ingredients) > 0 {
-		stmt, err := tx.Prepare("INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity) VALUES ($1, $2, $3)")
+		stmt, err := tx.Prepare("INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity) VALUES (?, ?, ?)")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -96,7 +102,7 @@ func (h *RecipeHandler) GetRecipeIngredients(w http.ResponseWriter, r *http.Requ
 		SELECT ri.ingredient_id, i.name, ri.quantity, COALESCE(i.unit, '') as unit, COALESCE(i.price, 0) as price, i.is_tracked
 		FROM recipe_ingredients ri
 		JOIN ingredients i ON ri.ingredient_id = i.id
-		WHERE ri.recipe_id = $1
+		WHERE ri.recipe_id = ?
 	`, recipeID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -144,7 +150,7 @@ func (h *RecipeHandler) AddRecipeIngredient(w http.ResponseWriter, r *http.Reque
 	if req.IngredientID == 0 && req.IngredientName != "" {
 		// First try to find existing ingredient by name
 		err := h.DB.QueryRow(
-			"SELECT id FROM ingredients WHERE LOWER(name) = LOWER($1)",
+			"SELECT id FROM ingredients WHERE LOWER(name) = LOWER(?)",
 			req.IngredientName,
 		).Scan(&req.IngredientID)
 
@@ -155,14 +161,20 @@ func (h *RecipeHandler) AddRecipeIngredient(w http.ResponseWriter, r *http.Reque
 				isTracked = *req.IsTracked
 			}
 
-			err = h.DB.QueryRow(
-				"INSERT INTO ingredients (name, current_stock, price, is_tracked) VALUES ($1, 0, NULL, $2) RETURNING id",
+			res, err := h.DB.Exec(
+				"INSERT INTO ingredients (name, current_stock, price, is_tracked) VALUES (?, 0, NULL, ?)",
 				req.IngredientName, isTracked,
-			).Scan(&req.IngredientID)
+			)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
+			id, err := res.LastInsertId()
+			if err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			req.IngredientID = int(id)
 		}
 	}
 
@@ -173,7 +185,7 @@ func (h *RecipeHandler) AddRecipeIngredient(w http.ResponseWriter, r *http.Reque
 
 	_, err := h.DB.Exec(
 		`INSERT INTO recipe_ingredients (recipe_id, ingredient_id, quantity) 
-		 VALUES ($1, $2, $3)
+		 VALUES (?, ?, ?)
 		 ON CONFLICT (recipe_id, ingredient_id) 
 		 DO UPDATE SET quantity = EXCLUDED.quantity`,
 		req.RecipeID, req.IngredientID, req.Quantity,
@@ -197,7 +209,7 @@ func (h *RecipeHandler) RemoveRecipeIngredient(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	_, err := h.DB.Exec("DELETE FROM recipe_ingredients WHERE recipe_id = $1 AND ingredient_id = $2", req.RecipeID, req.IngredientID)
+	_, err := h.DB.Exec("DELETE FROM recipe_ingredients WHERE recipe_id = ? AND ingredient_id = ?", req.RecipeID, req.IngredientID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -216,7 +228,7 @@ func (h *RecipeHandler) DeleteRecipe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err := h.DB.Exec("DELETE FROM recipes WHERE id = $1", req.ID)
+	_, err := h.DB.Exec("DELETE FROM recipes WHERE id = ?", req.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -241,7 +253,7 @@ func (h *RecipeHandler) UpdateRecipeName(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	result, err := h.DB.Exec("UPDATE recipes SET name = $1, notes = $2 WHERE id = $3", req.Name, req.Notes, req.ID)
+	result, err := h.DB.Exec("UPDATE recipes SET name = ?, notes = ? WHERE id = ?", req.Name, req.Notes, req.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -272,7 +284,7 @@ func (h *RecipeHandler) UpdateIngredientQuantity(w http.ResponseWriter, r *http.
 	}
 
 	result, err := h.DB.Exec(
-		"UPDATE recipe_ingredients SET quantity = $1 WHERE recipe_id = $2 AND ingredient_id = $3",
+		"UPDATE recipe_ingredients SET quantity = ? WHERE recipe_id = ? AND ingredient_id = ?",
 		req.Quantity, req.RecipeID, req.IngredientID,
 	)
 	if err != nil {

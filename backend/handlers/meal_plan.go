@@ -32,11 +32,24 @@ func (h *MealPlanHandler) GetMealPlan(w http.ResponseWriter, r *http.Request) {
 	var plan []models.MealPlan
 	for rows.Next() {
 		var mp models.MealPlan
+		var dateStr string
 		var rName sql.NullString
-		if err := rows.Scan(&mp.ID, &mp.Date, &mp.MealType, &mp.RecipeID, &rName, &mp.IsCooked); err != nil {
+		if err := rows.Scan(&mp.ID, &dateStr, &mp.MealType, &mp.RecipeID, &rName, &mp.IsCooked); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
+		// Parse the date string from SQLite
+		parsedDate, err := time.Parse("2006-01-02", dateStr[:10]) // Take first 10 chars just in case
+		if err == nil {
+			mp.Date = parsedDate
+		} else {
+			// Fallback or log error, but keep going?
+			// Try RFC3339 just in case
+			if parsedDate, err := time.Parse(time.RFC3339, dateStr); err == nil {
+				mp.Date = parsedDate
+			}
+		}
+
 		if rName.Valid {
 			mp.RecipeName = rName.String
 		}
@@ -68,11 +81,17 @@ func (h *MealPlanHandler) ScheduleMeal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var id int
-	err = h.DB.QueryRow("INSERT INTO meal_plan (date, meal_type, recipe_id) VALUES ($1, $2, $3) RETURNING id", date, input.MealType, input.RecipeID).Scan(&id)
+	res, err := h.DB.Exec("INSERT INTO meal_plan (date, meal_type, recipe_id) VALUES (?, ?, ?)", date.Format("2006-01-02"), input.MealType, input.RecipeID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	id64, err := res.LastInsertId()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	id = int(id64)
 
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]int{"id": id})
@@ -86,7 +105,7 @@ func (h *MealPlanHandler) DeleteMealPlan(w http.ResponseWriter, r *http.Request)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	_, err := h.DB.Exec("DELETE FROM meal_plan WHERE id = $1", req.ID)
+	_, err := h.DB.Exec("DELETE FROM meal_plan WHERE id = ?", req.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -114,7 +133,7 @@ func (h *MealPlanHandler) CookMeal(w http.ResponseWriter, r *http.Request) {
 	// 1. Check current status and get recipe ID
 	var recipeID sql.NullInt64
 	var isCooked bool
-	err = tx.QueryRow("SELECT recipe_id, COALESCE(is_cooked, FALSE) FROM meal_plan WHERE id = $1 FOR UPDATE", req.ID).Scan(&recipeID, &isCooked)
+	err = tx.QueryRow("SELECT recipe_id, COALESCE(is_cooked, FALSE) FROM meal_plan WHERE id = ?", req.ID).Scan(&recipeID, &isCooked)
 	if err == sql.ErrNoRows {
 		http.Error(w, "Meal plan not found", http.StatusNotFound)
 		return
@@ -134,7 +153,7 @@ func (h *MealPlanHandler) CookMeal(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// 2. Mark as cooked
-	_, err = tx.Exec("UPDATE meal_plan SET is_cooked = TRUE WHERE id = $1", req.ID)
+	_, err = tx.Exec("UPDATE meal_plan SET is_cooked = TRUE WHERE id = ?", req.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -154,7 +173,7 @@ func (h *MealPlanHandler) CookMeal(w http.ResponseWriter, r *http.Request) {
 		SELECT ri.ingredient_id, i.name, ri.quantity, i.current_stock
 		FROM recipe_ingredients ri
 		JOIN ingredients i ON ri.ingredient_id = i.id
-		WHERE ri.recipe_id = $1 AND i.is_tracked = TRUE
+		WHERE ri.recipe_id = ? AND i.is_tracked = TRUE
 	`, recipeID.Int64)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -188,7 +207,7 @@ func (h *MealPlanHandler) CookMeal(w http.ResponseWriter, r *http.Request) {
 
 	// Apply updates
 	for _, u := range updates {
-		_, err = tx.Exec("UPDATE ingredients SET current_stock = current_stock - $1 WHERE id = $2", u.Qty, u.ID)
+		_, err = tx.Exec("UPDATE ingredients SET current_stock = current_stock - ? WHERE id = ?", u.Qty, u.ID)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

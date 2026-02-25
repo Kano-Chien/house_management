@@ -23,7 +23,7 @@ func (h *InventoryHandler) GetInventory(w http.ResponseWriter, r *http.Request) 
 				SELECT SUM(ri.quantity)
 				FROM recipe_ingredients ri
 				INNER JOIN meal_plan mp ON ri.recipe_id = mp.recipe_id
-				WHERE ri.ingredient_id = i.id
+				WHERE ri.ingredient_id = i.id AND (mp.is_cooked = FALSE OR mp.is_cooked = 0)
 			), 0) as planned_consumption
 		FROM ingredients i
 		GROUP BY i.id
@@ -60,15 +60,20 @@ func (h *InventoryHandler) AddIngredient(w http.ResponseWriter, r *http.Request)
 	if i.Category == "" {
 		i.Category = "food"
 	}
-	err := h.DB.QueryRow(
-		"INSERT INTO ingredients (name, current_stock, unit, expiry_date, price, category, is_tracked) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id",
+	res, err := h.DB.Exec(
+		"INSERT INTO ingredients (name, current_stock, unit, expiry_date, price, category, is_tracked) VALUES (?, ?, ?, ?, ?, ?, ?)",
 		i.Name, i.CurrentStock, i.Unit, i.ExpiryDate, i.Price, i.Category, i.IsTracked,
-	).Scan(&i.ID)
-
+	)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	id, err := res.LastInsertId()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	i.ID = int(id)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -85,7 +90,7 @@ func (h *InventoryHandler) UpdateStock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result, err := h.DB.Exec("UPDATE ingredients SET current_stock = $1 WHERE id = $2", req.NewStock, req.ID)
+	result, err := h.DB.Exec("UPDATE ingredients SET current_stock = ? WHERE id = ?", req.NewStock, req.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -119,7 +124,7 @@ func (h *InventoryHandler) EditIngredient(w http.ResponseWriter, r *http.Request
 	}
 
 	result, err := h.DB.Exec(
-		"UPDATE ingredients SET name = $1, current_stock = $2, price = $3, category = $4, is_tracked = $5 WHERE id = $6",
+		"UPDATE ingredients SET name = ?, current_stock = ?, price = ?, category = ?, is_tracked = ? WHERE id = ?",
 		req.Name, req.Stock, req.Price, req.Category, req.IsTracked, req.ID,
 	)
 	if err != nil {
@@ -146,7 +151,7 @@ func (h *InventoryHandler) DeleteIngredient(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	result, err := h.DB.Exec("DELETE FROM ingredients WHERE id = $1", req.ID)
+	result, err := h.DB.Exec("DELETE FROM ingredients WHERE id = ?", req.ID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
