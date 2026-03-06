@@ -69,13 +69,18 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import InventoryTable from './components/InventoryTable.vue'
 import RecipeManager from './components/RecipeManager.vue'
 import MealPlanner from './components/MealPlanner.vue'
 import ShoppingList from './components/ShoppingList.vue'
 
-const currentTab = ref('inventory')
+const savedTab = localStorage.getItem('house_app_tab')
+const currentTab = ref(savedTab || 'inventory')
+
+watch(currentTab, (newTab) => {
+  localStorage.setItem('house_app_tab', newTab)
+})
 </script>
 
 <style>
