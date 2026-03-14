@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS ingredients (
     name TEXT NOT NULL,
     current_stock INTEGER DEFAULT 0,
     min_stock INTEGER DEFAULT 3, -- Minimum stock threshold for shopping list alerts
-    price REAL DEFAULT 0,
+    price INTEGER DEFAULT 0,
     category TEXT DEFAULT 'food',
     is_tracked BOOLEAN DEFAULT 1 -- SQLite uses 0/1 for boolean
 );
@@ -43,8 +43,19 @@ CREATE TABLE IF NOT EXISTS shopping_list_items (
     FOREIGN KEY (ingredient_id) REFERENCES ingredients(id) ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS ingredient_batches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    ingredient_id INTEGER NOT NULL,
+    quantity INTEGER NOT NULL DEFAULT 1,
+    expiry_date TEXT, -- YYYY-MM-DD, nullable
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (ingredient_id) REFERENCES ingredients(id) ON DELETE CASCADE
+);
+
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_meal_plan_date ON meal_plan(date);
 CREATE INDEX IF NOT EXISTS idx_meal_plan_recipe ON meal_plan(recipe_id);
 CREATE INDEX IF NOT EXISTS idx_ingredients_name ON ingredients(name);
 CREATE INDEX IF NOT EXISTS idx_shopping_ingredient ON shopping_list_items(ingredient_id);
+CREATE INDEX IF NOT EXISTS idx_batches_ingredient ON ingredient_batches(ingredient_id);
+CREATE INDEX IF NOT EXISTS idx_batches_expiry ON ingredient_batches(expiry_date);

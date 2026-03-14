@@ -109,11 +109,11 @@ func (h *RecipeHandler) GetRecipeIngredients(w http.ResponseWriter, r *http.Requ
 	defer rows.Close()
 
 	type IngredientDetail struct {
-		IngredientID int     `json:"ingredient_id"`
-		Name         string  `json:"name"`
-		Quantity     int     `json:"quantity"`
-		Price        float64 `json:"price"`
-		IsTracked    bool    `json:"is_tracked"`
+		IngredientID int    `json:"ingredient_id"`
+		Name         string `json:"name"`
+		Quantity     int    `json:"quantity"`
+		Price        int    `json:"price"`
+		IsTracked    bool   `json:"is_tracked"`
 	}
 
 	var ingredients []IngredientDetail

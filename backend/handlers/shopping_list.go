@@ -12,13 +12,13 @@ type ShoppingListHandler struct {
 }
 
 type ShoppingItem struct {
-	ID            int     `json:"id,omitempty"`
-	Name          string  `json:"name"`
-	IngredientID  *int    `json:"ingredient_id,omitempty"`
-	IsCustom      bool    `json:"is_custom"`
-	IsChecked     bool    `json:"is_checked"`
-	CurrentStock  int     `json:"current_stock,omitempty"`
-	EstimatedCost float64 `json:"estimated_cost,omitempty"`
+	ID            int    `json:"id,omitempty"`
+	Name          string `json:"name"`
+	IngredientID  *int   `json:"ingredient_id,omitempty"`
+	IsCustom      bool   `json:"is_custom"`
+	IsChecked     bool   `json:"is_checked"`
+	CurrentStock  int    `json:"current_stock,omitempty"`
+	EstimatedCost int    `json:"estimated_cost,omitempty"`
 }
 
 func (h *ShoppingListHandler) GetShoppingList(w http.ResponseWriter, r *http.Request) {

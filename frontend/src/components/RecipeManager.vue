@@ -118,7 +118,7 @@
                     × {{ ing.quantity }}
                   </span>
 
-                  <span v-if="ing.price" class="text-xs text-emerald-500 font-medium">${{ (ing.price * ing.quantity).toFixed(0) }}</span>
+                  <span v-if="ing.price" class="text-xs text-emerald-500 font-medium">${{ ing.price * ing.quantity }}</span>
                 </div>
                 <button @click="removeIngredient(recipe.id, ing.ingredient_id)"
                   class="opacity-0 group-hover/item:opacity-100 text-red-400 hover:text-red-600 transition-all text-lg leading-none">×</button>
@@ -206,7 +206,7 @@ const cardColors = [
 
 const recipeTotalCost = (recipe) => {
   const ings = recipe._ingredients || []
-  return ings.reduce((sum, ing) => sum + (ing.price || 0) * ing.quantity, 0).toFixed(0)
+  return ings.reduce((sum, ing) => sum + (ing.price || 0) * ing.quantity, 0)
 }
 
 // ---- Recipe Name Editing ----

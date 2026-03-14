@@ -19,10 +19,10 @@ import (
 var schemaSQL string
 
 func main() {
-	loadEnv(".env")
+	loadEnv(".env") 
 
 	// Database connection string (file path for SQLite)
-	dbPath := os.Getenv("DATABASE_URL")
+	dbPath := os.Getenv("DATABASE_URL") //your database path put in .env file
 	if dbPath == "" {
 		dbPath = "house.db"
 	}
@@ -93,6 +93,33 @@ func main() {
 	mux.HandleFunc("/api/inventory/delete", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" {
 			inventoryHandler.DeleteIngredient(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/inventory/stock-in", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			inventoryHandler.StockIn(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/inventory/batches", func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case "GET":
+			inventoryHandler.GetBatches(w, r)
+		case "PUT":
+			inventoryHandler.UpdateBatch(w, r)
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
+	mux.HandleFunc("/api/inventory/batches/delete", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			inventoryHandler.DeleteBatch(w, r)
 		} else {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		}
@@ -317,22 +344,22 @@ func (h spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	http.FileServer(http.Dir(h.staticPath)).ServeHTTP(w, r)
 }
 func loadEnv(path string) {
-	fmt.Printf("Loading .env from: %s\n", path)
+	fmt.Printf("Loading .env from: %s\n", path) // fmt for print
 	f, err := os.Open(path)
-	if err != nil {
+	if err != nil {  // nil is a special value in Go that represents the absence of a value
 		fmt.Printf("Error open .env: %v\n", err)
 		return
 	}
-	defer f.Close()
-	scanner := bufio.NewScanner(f)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
+	defer f.Close() // defer is a keyword in Go that defers the execution of a function until the surrounding function returns
+	scanner := bufio.NewScanner(f) // bufio.NewScanner is a function that creates a new scanner that reads from the given reader
+	for scanner.Scan() { // scanner.Scan() is a method that reads the next token from the scanner
+		line := strings.TrimSpace(scanner.Text()) // strings.TrimSpace is a function that removes leading and trailing whitespace from a string
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
 		parts := strings.SplitN(line, "=", 2)
 		if len(parts) == 2 {
-			os.Setenv(parts[0], parts[1])
+			os.Setenv(parts[0], parts[1]) // os.Setenv is a function that sets an environment variable
 			fmt.Printf("Loaded env: %s\n", parts[0])
 		}
 	}

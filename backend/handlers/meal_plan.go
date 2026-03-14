@@ -201,10 +201,64 @@ func (h *MealPlanHandler) CookMeal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Apply updates
+	// Apply updates - FEFO: consume from batches ordered by earliest expiry first (nulls last)
 	for _, u := range updates {
-		_, err = tx.Exec("UPDATE ingredients SET current_stock = current_stock - ? WHERE id = ?", u.Qty, u.ID)
+		remaining := u.Qty
+
+		batchRows, err := tx.Query(`
+			SELECT id, quantity FROM ingredient_batches
+			WHERE ingredient_id = ?
+			ORDER BY CASE WHEN expiry_date IS NULL OR expiry_date = '' THEN 1 ELSE 0 END,
+			         expiry_date ASC, id ASC
+		`, u.ID)
 		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		type batchItem struct {
+			ID  int
+			Qty int
+		}
+		var batches []batchItem
+		for batchRows.Next() {
+			var b batchItem
+			if err := batchRows.Scan(&b.ID, &b.Qty); err != nil {
+				batchRows.Close()
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			batches = append(batches, b)
+		}
+		batchRows.Close()
+
+		for _, b := range batches {
+			if remaining <= 0 {
+				break
+			}
+			consume := b.Qty
+			if consume > remaining {
+				consume = remaining
+			}
+			remaining -= consume
+			newQty := b.Qty - consume
+			if newQty == 0 {
+				if _, err := tx.Exec("DELETE FROM ingredient_batches WHERE id = ?", b.ID); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+			} else {
+				if _, err := tx.Exec("UPDATE ingredient_batches SET quantity = ? WHERE id = ?", newQty, b.ID); err != nil {
+					http.Error(w, err.Error(), http.StatusInternalServerError)
+					return
+				}
+			}
+		}
+
+		// Recompute current_stock as sum of remaining batches (consistent with UpdateBatch/DeleteBatch)
+		if _, err := tx.Exec(
+			"UPDATE ingredients SET current_stock = (SELECT COALESCE(SUM(quantity), 0) FROM ingredient_batches WHERE ingredient_id = ?) WHERE id = ?",
+			u.ID, u.ID,
+		); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
