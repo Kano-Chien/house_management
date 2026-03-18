@@ -198,6 +198,14 @@ func main() {
 		}
 	})
 
+	mux.HandleFunc("/api/mealplan/ingredients", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "GET" {
+			mealPlanHandler.GetMealPlanIngredients(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	mux.HandleFunc("/api/mealplan/delete", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method == "POST" {
 			mealPlanHandler.DeleteMealPlan(w, r)

@@ -37,13 +37,13 @@
                   <div class="space-y-1">
                 <div v-for="meal in getMealsForDay(day.dateStr).filter(m => m.meal_type === type)" :key="meal.id"
                      class="group relative pl-1.5 pr-1 py-1 hover:bg-white/60 transition-colors rounded-md min-h-[1.75rem]">
-                  
+
                   <!-- Meal Name -->
                   <div class="text-xs font-medium leading-tight flex items-start gap-1"
                        :class="meal.is_cooked ? 'text-gray-400 font-normal line-through opacity-70' : 'text-gray-700'"
-                       :title="meal.recipe_name || meal.custom_name">
+                       :title="meal.custom_name || meal.recipe_name">
                     <span v-if="meal.is_cooked" class="select-none text-xs pt-0.5" title="Yummy!">😋</span>
-                    <span>{{ meal.recipe_name || meal.custom_name || 'Unnamed' }}</span>
+                    <span>{{ meal.custom_name || meal.recipe_name || 'Unnamed' }}</span>
                   </div>
                 </div>
               </div>
@@ -60,7 +60,7 @@
     <!-- Edit Day Modal -->
     <div v-if="showModal" class="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4" @click.self="closeModal">
       <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col max-h-[90vh]">
-        
+
         <!-- Header -->
         <div class="p-6 border-b border-gray-100">
           <h3 class="font-bold text-xl text-gray-800">Edit Meals</h3>
@@ -73,40 +73,80 @@
             <h4 class="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2 flex items-center gap-2">
               {{ mealTypeStyle(type).icon }} {{ type }}
             </h4>
-            
+
             <!-- Existing Meals (that are not marked for removal) -->
             <div class="space-y-2 mb-2">
               <div v-for="meal in getMealsForEditor(type)" :key="'prod-'+meal.id"
                    class="flex items-center justify-between bg-gray-50 p-2 rounded-lg group">
                 <div class="flex items-center gap-2 flex-1 min-w-0">
                    <!-- Cook Button/Status -->
-                   <button v-if="!meal.is_cooked" @click.stop="cookMeal(meal)" 
-                           class="text-amber-500 hover:text-amber-600 hover:bg-amber-50 p-1 rounded transition-colors text-lg leading-none" 
+                   <button v-if="!meal.is_cooked" @click.stop="cookMeal(meal)"
+                           class="text-amber-500 hover:text-amber-600 hover:bg-amber-50 p-1 rounded transition-colors text-lg leading-none"
                            title="Cook this!">🍳</button>
                    <span v-else class="text-lg leading-none select-none" title="Cooked">😋</span>
-                   
-                   <span class="text-sm font-medium text-gray-700 truncate" :class="{'line-through text-gray-400': meal.is_cooked}">{{ meal.recipe_name || meal.custom_name || 'Unnamed' }}</span>
+
+                   <span class="text-sm font-medium text-gray-700 truncate" :class="{'line-through text-gray-400': meal.is_cooked}">{{ meal.custom_name || meal.recipe_name || 'Unnamed' }}</span>
                 </div>
                 <!-- Delete -->
                 <button @click="markForRemoval(meal.id)" class="text-gray-300 hover:text-red-400 p-1 ml-2 transition-colors text-lg leading-none">🗑️</button>
               </div>
-              
+
               <!-- Newly Added Meals (Pending Save) -->
               <div v-for="(meal, idx) in newMeals.filter(m => m.meal_type === type)" :key="'new-'+idx"
                    class="flex items-center justify-between bg-blue-50 border border-blue-100 p-2 rounded-lg">
-                <span class="text-sm font-medium text-blue-700 truncate flex-1">{{ getRecipeName(meal.recipe_id) }}</span>
+                <span class="text-sm font-medium text-blue-700 truncate flex-1">{{ meal.custom_name || getRecipeName(meal.recipe_id) }}</span>
                 <button @click="removeNewMeal(meal)" class="text-blue-400 hover:text-blue-600 p-1">✕</button>
               </div>
             </div>
 
             <!-- Add New Meal Controls -->
-            <div class="flex gap-2">
-              <select v-model="selectedRecipes[type]" class="flex-1 border border-gray-200 rounded-lg text-sm p-1.5 focus:outline-none focus:ring-2 focus:ring-blue-100">
-                <option value="" disabled>Add recipe...</option>
-                <option v-for="r in recipes" :key="r.id" :value="r.id">{{ r.name }}</option>
-              </select>
-              <button @click="addNewMeal(type)" :disabled="!selectedRecipes[type]"
-                      class="bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">Add</button>
+            <div class="space-y-2">
+              <div class="flex gap-2">
+                <select v-model="selectedRecipes[type]" @change="onRecipeSelected(type)" class="flex-1 border border-gray-200 rounded-lg text-sm p-1.5 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                  <option value="" disabled>Add recipe...</option>
+                  <option v-for="r in recipes" :key="r.id" :value="r.id">{{ r.name }}</option>
+                </select>
+              </div>
+
+              <!-- Ingredient Editor (shown after recipe selection) -->
+              <div v-if="showIngredientEditor[type]" class="bg-gray-50 rounded-lg p-3 space-y-3 border border-gray-200">
+                <!-- Variant Name -->
+                <div>
+                  <label class="text-xs font-medium text-gray-500 mb-1 block">Variant name (optional)</label>
+                  <input v-model="variantNames[type]" type="text" :placeholder="getRecipeName(selectedRecipes[type]) + ' variant...'"
+                         class="w-full border border-gray-200 rounded-lg text-sm p-1.5 focus:outline-none focus:ring-2 focus:ring-blue-100" />
+                </div>
+
+                <!-- Ingredient List -->
+                <div>
+                  <label class="text-xs font-medium text-gray-500 mb-1 block">Ingredients</label>
+                  <div class="space-y-1.5">
+                    <div v-for="(ing, idx) in editingIngredients[type]" :key="ing.ingredient_id"
+                         class="flex items-center gap-2 bg-white rounded-md p-1.5 border border-gray-100">
+                      <span class="text-sm text-gray-700 flex-1 truncate">{{ ing.name }}</span>
+                      <input v-model.number="ing.quantity" type="number" min="1"
+                             class="w-16 border border-gray-200 rounded text-sm p-1 text-center focus:outline-none focus:ring-2 focus:ring-blue-100" />
+                      <button @click="editingIngredients[type].splice(idx, 1)" class="text-gray-300 hover:text-red-400 text-sm px-1">✕</button>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Add Ingredient -->
+                <div>
+                  <select v-model="addIngredientSelection[type]" @change="addIngredientToEditor(type)" class="w-full border border-gray-200 rounded-lg text-sm p-1.5 focus:outline-none focus:ring-2 focus:ring-blue-100">
+                    <option value="" disabled>Add ingredient...</option>
+                    <option v-for="inv in availableIngredients(type)" :key="inv.id" :value="inv.id">{{ inv.name }}</option>
+                  </select>
+                </div>
+
+                <!-- Add to Meal / Cancel -->
+                <div class="flex gap-2 pt-1">
+                  <button @click="cancelIngredientEditor(type)"
+                          class="flex-1 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-500 hover:bg-gray-50 text-sm font-medium">Cancel</button>
+                  <button @click="addNewMeal(type)"
+                          class="flex-1 py-1.5 rounded-lg bg-blue-500 text-white hover:bg-blue-600 text-sm font-medium transition-colors">Add to meal</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -131,6 +171,7 @@ import { ref, computed, onMounted } from 'vue'
 
 const mealPlan = ref([])
 const recipes = ref([])
+const inventory = ref([])
 const weekOffset = ref(0)
 const showModal = ref(false)
 const modalDate = ref('')
@@ -138,8 +179,12 @@ const isSaving = ref(false)
 
 // Editor State
 const removedMealIds = ref(new Set())
-const newMeals = ref([]) // { meal_type, recipe_id }
+const newMeals = ref([]) // { meal_type, recipe_id, custom_name, ingredients: [] }
 const selectedRecipes = ref({ Breakfast: '', Lunch: '', Dinner: '' })
+const variantNames = ref({ Breakfast: '', Lunch: '', Dinner: '' })
+const editingIngredients = ref({ Breakfast: [], Lunch: [], Dinner: [] })
+const showIngredientEditor = ref({ Breakfast: false, Lunch: false, Dinner: false })
+const addIngredientSelection = ref({ Breakfast: '', Lunch: '', Dinner: '' })
 
 const getMonday = (offset) => {
   const d = new Date()
@@ -222,6 +267,13 @@ const fetchMealPlan = async () => {
   } catch (e) { console.error(e) }
 }
 
+const fetchInventory = async () => {
+  try {
+    const res = await fetch('/api/inventory')
+    if (res.ok) inventory.value = (await res.json()) || []
+  } catch (e) { console.error(e) }
+}
+
 const mealTypeStyle = (type) => {
   switch (type) {
     case 'Breakfast': return { bg: 'bg-emerald-50 border border-emerald-100', text: 'text-emerald-500', icon: '🌅' }
@@ -236,18 +288,85 @@ const openEdit = (dateStr) => {
   removedMealIds.value = new Set()
   newMeals.value = []
   selectedRecipes.value = { Breakfast: '', Lunch: '', Dinner: '' }
+  variantNames.value = { Breakfast: '', Lunch: '', Dinner: '' }
+  editingIngredients.value = { Breakfast: [], Lunch: [], Dinner: [] }
+  showIngredientEditor.value = { Breakfast: false, Lunch: false, Dinner: false }
+  addIngredientSelection.value = { Breakfast: '', Lunch: '', Dinner: '' }
   showModal.value = true
 }
 
 const closeModal = () => showModal.value = false
 
 const markForRemoval = (id) => removedMealIds.value.add(id)
-const addNewMeal = (type) => {
-  const id = selectedRecipes.value[type]
-  if (!id) return
-  newMeals.value.push({ meal_type: type, recipe_id: id })
-  selectedRecipes.value[type] = '' // reset dropdown
+
+const onRecipeSelected = async (type) => {
+  const recipeId = selectedRecipes.value[type]
+  if (!recipeId) return
+
+  try {
+    const res = await fetch(`/api/recipes/ingredients?recipe_id=${recipeId}`)
+    if (res.ok) {
+      const ingredients = (await res.json()) || []
+      editingIngredients.value[type] = ingredients.map(ing => ({
+        ingredient_id: ing.ingredient_id,
+        name: ing.name,
+        quantity: ing.quantity,
+        is_tracked: ing.is_tracked
+      }))
+    }
+  } catch (e) { console.error(e) }
+
+  variantNames.value[type] = ''
+  showIngredientEditor.value[type] = true
 }
+
+const availableIngredients = (type) => {
+  const usedIds = new Set(editingIngredients.value[type].map(i => i.ingredient_id))
+  return inventory.value.filter(i => !usedIds.has(i.id))
+}
+
+const addIngredientToEditor = (type) => {
+  const id = addIngredientSelection.value[type]
+  if (!id) return
+  const inv = inventory.value.find(i => i.id === id)
+  if (!inv) return
+  editingIngredients.value[type].push({
+    ingredient_id: inv.id,
+    name: inv.name,
+    quantity: 1,
+    is_tracked: inv.is_tracked
+  })
+  addIngredientSelection.value[type] = ''
+}
+
+const cancelIngredientEditor = (type) => {
+  showIngredientEditor.value[type] = false
+  selectedRecipes.value[type] = ''
+  variantNames.value[type] = ''
+  editingIngredients.value[type] = []
+  addIngredientSelection.value[type] = ''
+}
+
+const addNewMeal = (type) => {
+  const recipeId = selectedRecipes.value[type]
+  if (!recipeId) return
+
+  const customName = variantNames.value[type].trim()
+  const ingredients = editingIngredients.value[type]
+    .filter(ing => ing.quantity > 0)
+    .map(ing => ({ ingredient_id: ing.ingredient_id, quantity: ing.quantity }))
+
+  newMeals.value.push({
+    meal_type: type,
+    recipe_id: recipeId,
+    custom_name: customName,
+    ingredients
+  })
+
+  // Reset editor for this type
+  cancelIngredientEditor(type)
+}
+
 const removeNewMeal = (mealObj) => {
   const idx = newMeals.value.indexOf(mealObj)
   if (idx > -1) newMeals.value.splice(idx, 1)
@@ -257,7 +376,7 @@ const saveChanges = async () => {
   isSaving.value = true
   try {
     const promises = []
-    
+
     // Delete removed meals
     for (const id of removedMealIds.value) {
       promises.push(fetch('/api/mealplan/delete', {
@@ -275,7 +394,9 @@ const saveChanges = async () => {
         body: JSON.stringify({
           date: modalDate.value,
           meal_type: meal.meal_type,
-          recipe_id: parseInt(meal.recipe_id)
+          recipe_id: parseInt(meal.recipe_id),
+          custom_name: meal.custom_name,
+          ingredients: meal.ingredients
         })
       }))
     }
@@ -283,7 +404,7 @@ const saveChanges = async () => {
     await Promise.all(promises)
     await fetchMealPlan()
     closeModal()
-  } catch (e) { 
+  } catch (e) {
     console.error(e)
     alert('Error saving changes')
   } finally {
@@ -291,10 +412,9 @@ const saveChanges = async () => {
   }
 }
 
-
-
 const cookMeal = async (meal) => {
-  if (!confirm(`Mark "${meal.recipe_name}" as cooked? This will deduct ingredients from inventory.`)) return
+  const displayName = meal.custom_name || meal.recipe_name || 'this meal'
+  if (!confirm(`Mark "${displayName}" as cooked? This will deduct ingredients from inventory.`)) return
   try {
     const res = await fetch('/api/mealplan/cook', {
       method: 'POST',
@@ -321,5 +441,6 @@ const formatDateDisplay = (dateStr) => {
 onMounted(() => {
   fetchRecipes()
   fetchMealPlan()
+  fetchInventory()
 })
 </script>
