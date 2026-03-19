@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -201,8 +202,28 @@ func (h *MealPlanHandler) CookMeal(w http.ResponseWriter, r *http.Request) {
 		Name string
 		Qty  int
 	}
-	var updates []ingredientUpdate
-	var missingIngredients []string
+
+	scanIngredientUpdates := func(rows *sql.Rows) ([]ingredientUpdate, []string, error) {
+		var upd []ingredientUpdate
+		var missing []string
+		for rows.Next() {
+			var u ingredientUpdate
+			var currentStock int
+			if err := rows.Scan(&u.ID, &u.Name, &u.Qty, &currentStock); err != nil {
+				rows.Close()
+				return nil, nil, err
+			}
+			if currentStock < u.Qty {
+				missing = append(missing, fmt.Sprintf("%s (Need: %d, Have: %d)", u.Name, u.Qty, currentStock))
+			}
+			upd = append(upd, u)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return nil, nil, err
+		}
+		return upd, missing, nil
+	}
 
 	// Try meal_plan_ingredients first; fall back to recipe_ingredients for backward compat
 	rows, err := tx.Query(`
@@ -216,25 +237,14 @@ func (h *MealPlanHandler) CookMeal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hasMealIngredients := false
-	for rows.Next() {
-		hasMealIngredients = true
-		var u ingredientUpdate
-		var currentStock int
-		if err := rows.Scan(&u.ID, &u.Name, &u.Qty, &currentStock); err != nil {
-			rows.Close()
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		if currentStock < u.Qty {
-			missingIngredients = append(missingIngredients, fmt.Sprintf("%s (Need: %d, Have: %d)", u.Name, u.Qty, currentStock))
-		}
-		updates = append(updates, u)
+	updates, missingIngredients, err := scanIngredientUpdates(rows)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
 	}
-	rows.Close()
 
 	// Fallback: if no meal_plan_ingredients, backfill from recipe_ingredients
-	if !hasMealIngredients {
+	if len(updates) == 0 {
 		// Backfill meal_plan_ingredients from recipe so future cooks use the right source
 		_, err = tx.Exec(`
 			INSERT INTO meal_plan_ingredients (meal_plan_id, ingredient_id, quantity)
@@ -258,20 +268,11 @@ func (h *MealPlanHandler) CookMeal(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 
-		for rows.Next() {
-			var u ingredientUpdate
-			var currentStock int
-			if err := rows.Scan(&u.ID, &u.Name, &u.Qty, &currentStock); err != nil {
-				rows.Close()
-				http.Error(w, err.Error(), http.StatusInternalServerError)
-				return
-			}
-			if currentStock < u.Qty {
-				missingIngredients = append(missingIngredients, fmt.Sprintf("%s (Need: %d, Have: %d)", u.Name, u.Qty, currentStock))
-			}
-			updates = append(updates, u)
+		updates, missingIngredients, err = scanIngredientUpdates(rows)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
-		rows.Close()
 	}
 
 	if len(missingIngredients) > 0 {
@@ -352,9 +353,14 @@ func (h *MealPlanHandler) CookMeal(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MealPlanHandler) GetMealPlanIngredients(w http.ResponseWriter, r *http.Request) {
-	mealPlanID := r.URL.Query().Get("meal_plan_id")
-	if mealPlanID == "" {
+	mealPlanIDStr := r.URL.Query().Get("meal_plan_id")
+	if mealPlanIDStr == "" {
 		http.Error(w, "meal_plan_id required", http.StatusBadRequest)
+		return
+	}
+	mealPlanID, err := strconv.Atoi(mealPlanIDStr)
+	if err != nil {
+		http.Error(w, "meal_plan_id must be a valid integer", http.StatusBadRequest)
 		return
 	}
 
