@@ -33,6 +33,15 @@ CREATE TABLE IF NOT EXISTS meal_plan (
     FOREIGN KEY (recipe_id) REFERENCES recipes(id) ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS meal_plan_ingredients (
+    meal_plan_id INTEGER,
+    ingredient_id INTEGER,
+    quantity INTEGER NOT NULL,
+    PRIMARY KEY (meal_plan_id, ingredient_id),
+    FOREIGN KEY (meal_plan_id) REFERENCES meal_plan(id) ON DELETE CASCADE,
+    FOREIGN KEY (ingredient_id) REFERENCES ingredients(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS shopping_list_items (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
@@ -59,3 +68,4 @@ CREATE INDEX IF NOT EXISTS idx_ingredients_name ON ingredients(name);
 CREATE INDEX IF NOT EXISTS idx_shopping_ingredient ON shopping_list_items(ingredient_id);
 CREATE INDEX IF NOT EXISTS idx_batches_ingredient ON ingredient_batches(ingredient_id);
 CREATE INDEX IF NOT EXISTS idx_batches_expiry ON ingredient_batches(expiry_date);
+CREATE INDEX IF NOT EXISTS idx_meal_plan_ingredients ON meal_plan_ingredients(meal_plan_id);

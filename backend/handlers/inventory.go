@@ -21,10 +21,10 @@ func (h *InventoryHandler) GetInventory(w http.ResponseWriter, r *http.Request) 
 			COALESCE(i.category, 'food') as category,
 			i.is_tracked,
 			COALESCE((
-				SELECT SUM(ri.quantity)
-				FROM recipe_ingredients ri
-				INNER JOIN meal_plan mp ON ri.recipe_id = mp.recipe_id
-				WHERE ri.ingredient_id = i.id AND (mp.is_cooked = FALSE OR mp.is_cooked = 0)
+				SELECT SUM(mpi.quantity)
+				FROM meal_plan_ingredients mpi
+				INNER JOIN meal_plan mp ON mpi.meal_plan_id = mp.id
+				WHERE mpi.ingredient_id = i.id AND (mp.is_cooked = FALSE OR mp.is_cooked = 0)
 			), 0) as planned_consumption,
 			(SELECT MIN(b.expiry_date) FROM ingredient_batches b
 			 WHERE b.ingredient_id = i.id AND b.expiry_date IS NOT NULL AND b.expiry_date != '') as earliest_expiry
