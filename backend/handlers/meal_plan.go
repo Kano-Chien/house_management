@@ -134,6 +134,59 @@ func (h *MealPlanHandler) ScheduleMeal(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]int{"id": id})
 }
 
+func (h *MealPlanHandler) UpdateMealPlan(w http.ResponseWriter, r *http.Request) {
+	type IngredientInput struct {
+		IngredientID int `json:"ingredient_id"`
+		Quantity     int `json:"quantity"`
+	}
+	type Request struct {
+		ID          int               `json:"id"`
+		CustomName  *string           `json:"custom_name"`
+		Ingredients []IngredientInput `json:"ingredients"`
+	}
+	var input Request
+	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	tx, err := h.DB.Begin()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	defer tx.Rollback()
+
+	if input.CustomName != nil {
+		if _, err := tx.Exec("UPDATE meal_plan SET custom_name = ? WHERE id = ?", *input.CustomName, input.ID); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	if input.Ingredients != nil {
+		if _, err := tx.Exec("DELETE FROM meal_plan_ingredients WHERE meal_plan_id = ?", input.ID); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		for _, ing := range input.Ingredients {
+			if _, err := tx.Exec("INSERT INTO meal_plan_ingredients (meal_plan_id, ingredient_id, quantity) VALUES (?, ?, ?)",
+				input.ID, ing.IngredientID, ing.Quantity); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "updated"})
+}
+
 func (h *MealPlanHandler) DeleteMealPlan(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ID int `json:"id"`

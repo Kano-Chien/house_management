@@ -85,10 +85,14 @@
                            title="Cook this!">🍳</button>
                    <span v-else class="text-lg leading-none select-none" title="Cooked">😋</span>
 
-                   <span class="text-sm font-medium text-gray-700 truncate" :class="{'line-through text-gray-400': meal.is_cooked}">{{ meal.custom_name || meal.recipe_name || 'Unnamed' }}</span>
+                   <span class="text-sm font-medium text-gray-700 truncate" :class="{'line-through text-gray-400': meal.is_cooked}">
+                     {{ getUpdatedName(meal) }}
+                   </span>
                 </div>
+                <!-- Edit -->
+                <button v-if="!meal.is_cooked && meal.recipe_id" @click="editExistingMeal(meal)" class="text-gray-300 hover:text-blue-400 p-1 transition-colors text-sm leading-none" title="Edit ingredients">✏️</button>
                 <!-- Delete -->
-                <button @click="markForRemoval(meal.id)" class="text-gray-300 hover:text-red-400 p-1 ml-2 transition-colors text-lg leading-none">🗑️</button>
+                <button @click="markForRemoval(meal.id)" class="text-gray-300 hover:text-red-400 p-1 ml-1 transition-colors text-lg leading-none">🗑️</button>
               </div>
 
               <!-- Newly Added Meals (Pending Save) -->
@@ -101,7 +105,7 @@
 
             <!-- Add New Meal Controls -->
             <div class="space-y-2">
-              <div class="flex gap-2">
+              <div v-if="!editingMealId || !showIngredientEditor[type]" class="flex gap-2">
                 <select v-model="selectedRecipes[type]" @change="onRecipeSelected(type)" class="flex-1 border border-gray-200 rounded-lg text-sm p-1.5 focus:outline-none focus:ring-2 focus:ring-blue-100">
                   <option value="" disabled>Add recipe...</option>
                   <option v-for="r in recipes" :key="r.id" :value="r.id">{{ r.name }}</option>
@@ -139,11 +143,13 @@
                   </select>
                 </div>
 
-                <!-- Add to Meal / Cancel -->
+                <!-- Save / Cancel -->
                 <div class="flex gap-2 pt-1">
                   <button @click="cancelIngredientEditor(type)"
                           class="flex-1 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-500 hover:bg-gray-50 text-sm font-medium">Cancel</button>
-                  <button @click="addNewMeal(type)"
+                  <button v-if="editingMealId" @click="saveEditingMeal(type)"
+                          class="flex-1 py-1.5 rounded-lg bg-green-500 text-white hover:bg-green-600 text-sm font-medium transition-colors">Save changes</button>
+                  <button v-else @click="addNewMeal(type)"
                           class="flex-1 py-1.5 rounded-lg bg-blue-500 text-white hover:bg-blue-600 text-sm font-medium transition-colors">Add to meal</button>
                 </div>
               </div>
@@ -185,6 +191,8 @@ const variantNames = ref({ Breakfast: '', Lunch: '', Dinner: '' })
 const editingIngredients = ref({ Breakfast: [], Lunch: [], Dinner: [] })
 const showIngredientEditor = ref({ Breakfast: false, Lunch: false, Dinner: false })
 const addIngredientSelection = ref({ Breakfast: '', Lunch: '', Dinner: '' })
+const editingMealId = ref(null) // meal_plan id being edited (null = adding new)
+const updatedMeals = ref([]) // { id, custom_name, ingredients: [] }
 
 const getMonday = (offset) => {
   const d = new Date()
@@ -253,6 +261,12 @@ const getMealsForEditor = (type) => {
 
 const getRecipeName = (id) => recipes.value.find(r => r.id === id)?.name || 'Unknown'
 
+const getUpdatedName = (meal) => {
+  const updated = updatedMeals.value.find(m => m.id === meal.id)
+  if (updated && updated.custom_name) return updated.custom_name
+  return meal.custom_name || meal.recipe_name || 'Unnamed'
+}
+
 const fetchRecipes = async () => {
   try {
     const res = await fetch('/api/recipes')
@@ -287,6 +301,8 @@ const openEdit = (dateStr) => {
   modalDate.value = dateStr
   removedMealIds.value = new Set()
   newMeals.value = []
+  updatedMeals.value = []
+  editingMealId.value = null
   selectedRecipes.value = { Breakfast: '', Lunch: '', Dinner: '' }
   variantNames.value = { Breakfast: '', Lunch: '', Dinner: '' }
   editingIngredients.value = { Breakfast: [], Lunch: [], Dinner: [] }
@@ -339,12 +355,74 @@ const addIngredientToEditor = (type) => {
   addIngredientSelection.value[type] = ''
 }
 
+const editExistingMeal = async (meal) => {
+  if (meal.is_cooked) return
+  const type = meal.meal_type
+
+  const draftMeal = updatedMeals.value.find(m => m.id === meal.id)
+
+  if (draftMeal) {
+    editingIngredients.value[type] = draftMeal.ingredients.map(ing => ({
+      ingredient_id: ing.ingredient_id,
+      name: ing.name,        
+      quantity: ing.quantity, 
+      is_tracked: ing.is_tracked
+    }))
+  } else {
+    try {
+      const res = await fetch(`/api/mealplan/ingredients?meal_plan_id=${meal.id}`)
+      if (res.ok) {
+        const ingredients = (await res.json()) || []
+        editingIngredients.value[type] = ingredients.map(ing => ({
+          ingredient_id: ing.ingredient_id,
+          name: ing.name,
+          quantity: ing.quantity,
+          is_tracked: ing.is_tracked
+        }))
+      }
+    } catch (e) { console.error(e) }
+  }
+
+  editingMealId.value = meal.id
+  selectedRecipes.value[type] = meal.recipe_id || ''
+  
+  variantNames.value[type] = draftMeal ? draftMeal.custom_name : (meal.custom_name || '')
+  
+  showIngredientEditor.value[type] = true
+}
+
+const saveEditingMeal = (type) => {
+  const mealId = editingMealId.value
+  if (!mealId) return
+
+  const customName = variantNames.value[type].trim()
+  
+  const draftIngredients = editingIngredients.value[type]
+    .filter(ing => ing.quantity > 0)
+    .map(ing => ({ 
+      ingredient_id: ing.ingredient_id, 
+      name: ing.name,
+      quantity: ing.quantity,
+      is_tracked: ing.is_tracked
+    }))
+
+  updatedMeals.value = updatedMeals.value.filter(m => m.id !== mealId)
+  updatedMeals.value.push({ 
+    id: mealId, 
+    custom_name: customName, 
+    ingredients: draftIngredients 
+  })
+  
+  cancelIngredientEditor(type)
+}
+
 const cancelIngredientEditor = (type) => {
   showIngredientEditor.value[type] = false
   selectedRecipes.value[type] = ''
   variantNames.value[type] = ''
   editingIngredients.value[type] = []
   addIngredientSelection.value[type] = ''
+  editingMealId.value = null
 }
 
 const addNewMeal = (type) => {
@@ -383,6 +461,19 @@ const saveChanges = async () => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id })
+      }))
+    }
+
+    // Update edited meals
+    for (const meal of updatedMeals.value) {
+      promises.push(fetch('/api/mealplan/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          id: meal.id,
+          custom_name: meal.custom_name,
+          ingredients: meal.ingredients
+        })
       }))
     }
 
