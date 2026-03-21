@@ -96,7 +96,7 @@
               </div>
 
               <!-- Newly Added Meals (Pending Save) -->
-              <div v-for="(meal, idx) in newMeals.filter(m => m.meal_type === type)" :key="'new-'+idx"
+              <div v-for="meal in newMeals.filter(m => m.meal_type === type)" :key="meal._key"
                    class="flex items-center justify-between bg-blue-50 border border-blue-100 p-2 rounded-lg">
                 <span class="text-sm font-medium text-blue-700 truncate flex-1">{{ meal.custom_name || getRecipeName(meal.recipe_id) }}</span>
                 <button @click="removeNewMeal(meal)" class="text-blue-400 hover:text-blue-600 p-1">✕</button>
@@ -327,7 +327,6 @@ const onRecipeSelected = async (type) => {
         ingredient_id: ing.ingredient_id,
         name: ing.name,
         quantity: ing.quantity,
-        is_tracked: ing.is_tracked
       }))
     }
   } catch (e) { console.error(e) }
@@ -350,7 +349,6 @@ const addIngredientToEditor = (type) => {
     ingredient_id: inv.id,
     name: inv.name,
     quantity: 1,
-    is_tracked: inv.is_tracked
   })
   addIngredientSelection.value[type] = ''
 }
@@ -364,9 +362,8 @@ const editExistingMeal = async (meal) => {
   if (draftMeal) {
     editingIngredients.value[type] = draftMeal.ingredients.map(ing => ({
       ingredient_id: ing.ingredient_id,
-      name: ing.name,        
-      quantity: ing.quantity, 
-      is_tracked: ing.is_tracked
+      name: ing.name,
+      quantity: ing.quantity,
     }))
   } else {
     try {
@@ -377,7 +374,6 @@ const editExistingMeal = async (meal) => {
           ingredient_id: ing.ingredient_id,
           name: ing.name,
           quantity: ing.quantity,
-          is_tracked: ing.is_tracked
         }))
       }
     } catch (e) { console.error(e) }
@@ -399,11 +395,10 @@ const saveEditingMeal = (type) => {
   
   const draftIngredients = editingIngredients.value[type]
     .filter(ing => ing.quantity > 0)
-    .map(ing => ({ 
-      ingredient_id: ing.ingredient_id, 
+    .map(ing => ({
+      ingredient_id: ing.ingredient_id,
       name: ing.name,
       quantity: ing.quantity,
-      is_tracked: ing.is_tracked
     }))
 
   updatedMeals.value = updatedMeals.value.filter(m => m.id !== mealId)
@@ -435,6 +430,7 @@ const addNewMeal = (type) => {
     .map(ing => ({ ingredient_id: ing.ingredient_id, quantity: ing.quantity }))
 
   newMeals.value.push({
+    _key: `new-meal-${Date.now()}-${Math.random()}`,
     meal_type: type,
     recipe_id: recipeId,
     custom_name: customName,

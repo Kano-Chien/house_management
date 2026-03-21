@@ -16,6 +16,11 @@ type MealPlanHandler struct {
 	DB *sql.DB
 }
 
+type ingredientInput struct {
+	IngredientID int `json:"ingredient_id"`
+	Quantity     int `json:"quantity"`
+}
+
 func (h *MealPlanHandler) GetMealPlan(w http.ResponseWriter, r *http.Request) {
 	rows, err := h.DB.Query(`
 		SELECT mp.id, mp.date, mp.meal_type, mp.recipe_id, r.name, COALESCE(mp.custom_name, ''), COALESCE(mp.is_cooked, FALSE)
@@ -59,16 +64,12 @@ func (h *MealPlanHandler) GetMealPlan(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MealPlanHandler) ScheduleMeal(w http.ResponseWriter, r *http.Request) {
-	type IngredientInput struct {
-		IngredientID int `json:"ingredient_id"`
-		Quantity     int `json:"quantity"`
-	}
 	type Request struct {
-		Date        string            `json:"date"` // YYYY-MM-DD
-		MealType    string            `json:"meal_type"`
-		RecipeID    *int              `json:"recipe_id"`
-		CustomName  string            `json:"custom_name"`
-		Ingredients []IngredientInput `json:"ingredients"`
+		Date        string           `json:"date"` // YYYY-MM-DD
+		MealType    string           `json:"meal_type"`
+		RecipeID    *int             `json:"recipe_id"`
+		CustomName  string           `json:"custom_name"`
+		Ingredients []ingredientInput `json:"ingredients"`
 	}
 	var input Request
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -135,14 +136,10 @@ func (h *MealPlanHandler) ScheduleMeal(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *MealPlanHandler) UpdateMealPlan(w http.ResponseWriter, r *http.Request) {
-	type IngredientInput struct {
-		IngredientID int `json:"ingredient_id"`
-		Quantity     int `json:"quantity"`
-	}
 	type Request struct {
-		ID          int               `json:"id"`
-		CustomName  *string           `json:"custom_name"`
-		Ingredients []IngredientInput `json:"ingredients"`
+		ID          int              `json:"id"`
+		CustomName  *string          `json:"custom_name"`
+		Ingredients []ingredientInput `json:"ingredients"`
 	}
 	var input Request
 	if err := json.NewDecoder(r.Body).Decode(&input); err != nil {
@@ -418,7 +415,7 @@ func (h *MealPlanHandler) GetMealPlanIngredients(w http.ResponseWriter, r *http.
 	}
 
 	rows, err := h.DB.Query(`
-		SELECT mpi.ingredient_id, i.name, mpi.quantity, i.is_tracked
+		SELECT mpi.ingredient_id, i.name, mpi.quantity
 		FROM meal_plan_ingredients mpi
 		JOIN ingredients i ON mpi.ingredient_id = i.id
 		WHERE mpi.meal_plan_id = ?
@@ -433,13 +430,12 @@ func (h *MealPlanHandler) GetMealPlanIngredients(w http.ResponseWriter, r *http.
 		IngredientID int    `json:"ingredient_id"`
 		Name         string `json:"name"`
 		Quantity     int    `json:"quantity"`
-		IsTracked    bool   `json:"is_tracked"`
 	}
 
 	var ingredients []IngredientDetail
 	for rows.Next() {
 		var ing IngredientDetail
-		if err := rows.Scan(&ing.IngredientID, &ing.Name, &ing.Quantity, &ing.IsTracked); err != nil {
+		if err := rows.Scan(&ing.IngredientID, &ing.Name, &ing.Quantity); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
