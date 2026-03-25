@@ -32,7 +32,9 @@ func RunMigrations(db *sql.DB) error {
 	defer rows.Close()
 	for rows.Next() {
 		var v int
-		rows.Scan(&v)
+		if err := rows.Scan(&v); err != nil {
+			return fmt.Errorf("scan migration version: %w", err)
+		}
 		applied[v] = true
 	}
 	if err := rows.Err(); err != nil {
@@ -54,7 +56,10 @@ func RunMigrations(db *sql.DB) error {
 
 	for _, filename := range files {
 		var version int
-		fmt.Sscanf(filename, "%d_", &version)
+		if n, err := fmt.Sscanf(filename, "%d_", &version); n != 1 || err != nil {
+			log.Printf("Warning: skipping migration file with non-numeric prefix: %s", filename)
+			continue
+		}
 
 		if applied[version] {
 			continue
@@ -65,14 +70,25 @@ func RunMigrations(db *sql.DB) error {
 			return fmt.Errorf("read migration %s: %w", filename, err)
 		}
 
+		tx, err := db.Begin()
+		if err != nil {
+			return fmt.Errorf("begin transaction for %s: %w", filename, err)
+		}
+
 		for _, stmt := range splitSQL(string(content)) {
-			if _, err := db.Exec(stmt); err != nil {
+			if _, err := tx.Exec(stmt); err != nil {
+				tx.Rollback()
 				return fmt.Errorf("execute migration %s: %w\nSQL: %s", filename, err, stmt)
 			}
 		}
 
-		if _, err := db.Exec("INSERT INTO schema_migrations (version, name) VALUES (?, ?)", version, filename); err != nil {
+		if _, err := tx.Exec("INSERT INTO schema_migrations (version, name) VALUES (?, ?)", version, filename); err != nil {
+			tx.Rollback()
 			return fmt.Errorf("record migration %s: %w", filename, err)
+		}
+
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("commit migration %s: %w", filename, err)
 		}
 		log.Printf("Applied migration: %s", filename)
 	}
