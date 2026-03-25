@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"database/sql"
-	_ "embed"
 	"fmt"
 	"log"
 	"net/http"
@@ -11,12 +10,10 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/Kano-Chien/house_management/backend/database"
 	"github.com/Kano-Chien/house_management/backend/handlers"
 	_ "modernc.org/sqlite"
 )
-
-//go:embed database/schema_sqlite.sql
-var schemaSQL string
 
 func main() {
 	loadEnv(".env") 
@@ -47,11 +44,11 @@ func main() {
 	// This serializes all db access which is fine for this scale and Pi Zero
 	db.SetMaxOpenConns(1)
 
-	// Execute Schema
-	if _, err := db.Exec(schemaSQL); err != nil {
-		log.Fatal("Error executing schema:", err)
+	// Run migrations
+	if err := database.RunMigrations(db); err != nil {
+		log.Fatal("Migration failed:", err)
 	}
-	fmt.Println("Database schema applied successfully.")
+	fmt.Println("Database migrations applied successfully.")
 
 	// Initialize Handlers
 	inventoryHandler := &handlers.InventoryHandler{DB: db}
