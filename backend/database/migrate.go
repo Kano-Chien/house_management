@@ -96,7 +96,9 @@ func RunMigrations(db *sql.DB) error {
 	return nil
 }
 
-// splitSQL splits a SQL file into individual statements, ignoring empty lines and comments.
+// splitSQL splits a SQL file into individual statements by semicolon.
+// NOTE: This does not handle semicolons inside string literals or trigger bodies.
+// For simple DDL migrations this is sufficient; revisit if triggers are added.
 func splitSQL(content string) []string {
 	var stmts []string
 	for _, s := range strings.Split(content, ";") {
