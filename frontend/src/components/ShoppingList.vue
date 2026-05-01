@@ -46,7 +46,7 @@
             </p>
           </div>
           <button @click="removeItem(index)"
-                  class="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 transition-all text-xl leading-none flex-shrink-0">×</button>
+                  class="text-gray-300 hover:text-red-500 active:text-red-600 transition-colors text-xl leading-none flex-shrink-0 p-1">×</button>
         </div>
       </div>
     </div>
