@@ -29,21 +29,24 @@
     <div v-if="!loading && displayList.length === 0" class="text-center py-16">
       <div class="text-6xl mb-4">✅</div>
       <p class="text-green-500 font-semibold text-lg">Everything is in stock!</p>
-      <p class="text-gray-400 text-sm mt-1">All tracked items have 3+ in stock.</p>
+      <p class="text-gray-400 text-sm mt-1">All tracked items are in stock.</p>
     </div>
 
     <div v-else-if="!loading">
       <div class="space-y-2">
         <!-- Auto-generated low stock items -->
         <div v-for="(item, index) in displayList" :key="item.id || 'item-'+index"
-             :class="[!item.is_checked ? 'opacity-40' : '', item.is_custom ? 'border-blue-100 bg-blue-50/30' : 'border-gray-100 bg-white']"
+             :class="[item.is_checked ? 'opacity-50' : '', item.is_custom ? 'border-blue-100 bg-blue-50/30' : 'border-gray-100 bg-white']"
              class="flex items-center gap-3 p-4 rounded-xl border shadow-sm transition-all hover:shadow-md group">
           <input type="checkbox" v-model="item.is_checked" @change="saveList(item)"
                  class="w-5 h-5 rounded-lg text-blue-500 focus:ring-blue-400 cursor-pointer flex-shrink-0" />
-          <div class="flex-1 min-w-0">
-            <p :class="!item.is_checked ? 'line-through text-gray-400' : 'text-gray-800'" class="font-medium text-sm truncate">
+          <div class="flex items-center gap-1.5 flex-1 min-w-0">
+            <p :class="item.is_checked ? 'line-through text-gray-400' : 'text-gray-800'" class="font-medium text-sm truncate">
               {{ item.name }}
             </p>
+            <AppBadge :variant="item.is_custom ? 'custom' : 'auto'" class="flex-shrink-0">
+              {{ item.is_custom ? 'Custom' : 'Auto' }}
+            </AppBadge>
           </div>
           <button @click="removeItem(index)"
                   class="text-gray-300 hover:text-red-500 active:text-red-600 transition-colors text-xl leading-none flex-shrink-0 p-1">×</button>
@@ -56,6 +59,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue'
 import { useToast } from '../composables/useToast.js'
+import AppBadge from './ui/AppBadge.vue'
 
 const { toast } = useToast()
 
@@ -141,9 +145,8 @@ const fetchShoppingList = async () => {
 }
 
 const sendToLine = async () => {
-  // checked = user wants to buy
   const itemsToSend = displayList.value
-    .filter(i => i.is_checked)
+    .filter(i => !i.is_checked)
     .map(i => ({ name: i.name }))
   
   if (itemsToSend.length === 0) return
