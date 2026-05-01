@@ -306,11 +306,32 @@
         </div>
       </div>
     </Transition>
+
+    <!-- Confirm delete item -->
+    <ConfirmDialog
+      v-if="confirmDelete"
+      :message="`Delete &quot;${confirmDelete.name}&quot;? This cannot be undone.`"
+      @confirm="confirmDeleteItem"
+      @cancel="confirmDelete = null"
+    />
+
+    <!-- Confirm delete batch -->
+    <ConfirmDialog
+      v-if="confirmDeleteBatch"
+      title="Delete batch?"
+      :message="`Remove batch of ${confirmDeleteBatch.quantity}? This cannot be undone.`"
+      @confirm="confirmDeleteBatchItem"
+      @cancel="confirmDeleteBatch = null"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import ConfirmDialog from './ui/ConfirmDialog.vue'
+import { useToast } from '../composables/useToast.js'
+
+const { toast } = useToast()
 
 const SortIcon = {
   props: ['active', 'dir'],
@@ -334,6 +355,9 @@ const editForm = ref({ name: '', price: 0, category: 'food', is_tracked: true })
 const editBatches = ref([])
 const batchEditId = ref(null)
 const batchEditForm = ref({ quantity: 1, expiry_date: '' })
+
+const confirmDelete = ref(null)
+const confirmDeleteBatch = ref(null)
 
 const startEdit = async (item) => {
   editingItem.value = item
@@ -363,7 +387,7 @@ const saveEdit = async () => {
       editingItem.value = null
     }
   } catch (e) {
-    console.error('Failed to save edit', e)
+    toast('Failed to save changes', 'error')
   }
 }
 
@@ -372,7 +396,7 @@ const loadBatches = async (ingredientId) => {
     const res = await fetch(`/api/inventory/batches?ingredient_id=${ingredientId}`)
     if (res.ok) editBatches.value = (await res.json()) || []
   } catch (e) {
-    console.error('Failed to load batches', e)
+    toast('Failed to load batches', 'error')
   }
 }
 
@@ -394,12 +418,16 @@ const saveBatchEdit = async () => {
       await fetchInventory()
     }
   } catch (e) {
-    console.error('Failed to save batch', e)
+    toast('Failed to save batch', 'error')
   }
 }
 
-const deleteBatch = async (batch) => {
-  if (!confirm(`Delete this batch (qty: ${batch.quantity})?`)) return
+const deleteBatch = (batch) => {
+  confirmDeleteBatch.value = batch
+}
+const confirmDeleteBatchItem = async () => {
+  const batch = confirmDeleteBatch.value
+  confirmDeleteBatch.value = null
   try {
     const res = await fetch('/api/inventory/batches/delete', {
       method: 'POST',
@@ -409,9 +437,11 @@ const deleteBatch = async (batch) => {
     if (res.ok) {
       await loadBatches(editingItem.value.id)
       await fetchInventory()
+    } else {
+      toast('Failed to delete batch', 'error')
     }
   } catch (e) {
-    console.error('Failed to delete batch', e)
+    toast('Failed to delete batch', 'error')
   }
 }
 
@@ -452,7 +482,7 @@ const submitStockIn = async () => {
       setTimeout(() => { showStockInModal.value = false; stockInSubmitting.value = false }, 600)
     }
   } catch (e) {
-    console.error('Failed to stock in', e)
+    toast('Failed to stock in', 'error')
     stockInSubmitting.value = false
   }
 }
@@ -496,7 +526,7 @@ const fetchInventory = async () => {
     const res = await fetch('/api/inventory')
     if (res.ok) inventory.value = await res.json()
   } catch (e) {
-    console.error('Failed to fetch inventory', e)
+    toast('Failed to load inventory', 'error')
   }
 }
 
@@ -519,23 +549,32 @@ const addItem = async () => {
       nameInputRef.value?.focus()
     }
   } catch (e) {
-    console.error('Failed to add item', e)
+    toast('Failed to add item', 'error')
   } finally {
     setTimeout(() => { adding.value = false }, 600)
   }
 }
 
-const deleteItem = async (item) => {
-  if (!confirm(`Delete "${item.name}"?`)) return
+const deleteItem = (item) => {
+  confirmDelete.value = item
+}
+const confirmDeleteItem = async () => {
+  const item = confirmDelete.value
+  confirmDelete.value = null
   try {
     const res = await fetch('/api/inventory/delete', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: item.id })
+      body: JSON.stringify({ id: item.id }),
     })
-    if (res.ok) await fetchInventory()
+    if (res.ok) {
+      await fetchInventory()
+      toast(`"${item.name}" deleted`)
+    } else {
+      toast('Failed to delete item', 'error')
+    }
   } catch (e) {
-    console.error('Failed to delete item', e)
+    toast('Failed to delete item', 'error')
   }
 }
 

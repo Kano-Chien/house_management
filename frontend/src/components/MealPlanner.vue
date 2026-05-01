@@ -169,11 +169,26 @@
         </div>
       </div>
     </div>
+
+    <ConfirmDialog
+      v-if="confirmCookMeal"
+      title="Mark as cooked?"
+      :message="`Mark &quot;${confirmCookMeal.recipe_name || confirmCookMeal.custom_name}&quot; as cooked?`"
+      confirmLabel="Cook it 🍳"
+      confirmVariant="primary"
+      @confirm="confirmCookMealItem"
+      @cancel="confirmCookMeal = null"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import ConfirmDialog from './ui/ConfirmDialog.vue'
+import { useToast } from '../composables/useToast.js'
+
+const { toast } = useToast()
+const confirmCookMeal = ref(null)
 
 const mealPlan = ref([])
 const recipes = ref([])
@@ -271,21 +286,21 @@ const fetchRecipes = async () => {
   try {
     const res = await fetch('/api/recipes')
     if (res.ok) recipes.value = (await res.json()) || []
-  } catch (e) { console.error(e) }
+  } catch (e) { toast('Network error', 'error') }
 }
 
 const fetchMealPlan = async () => {
   try {
     const res = await fetch('/api/mealplan')
     if (res.ok) mealPlan.value = (await res.json()) || []
-  } catch (e) { console.error(e) }
+  } catch (e) { toast('Network error', 'error') }
 }
 
 const fetchInventory = async () => {
   try {
     const res = await fetch('/api/inventory')
     if (res.ok) inventory.value = (await res.json()) || []
-  } catch (e) { console.error(e) }
+  } catch (e) { toast('Network error', 'error') }
 }
 
 const mealTypeStyle = (type) => {
@@ -329,7 +344,7 @@ const onRecipeSelected = async (type) => {
         quantity: ing.quantity,
       }))
     }
-  } catch (e) { console.error(e) }
+  } catch (e) { toast('Network error', 'error') }
 
   variantNames.value[type] = ''
   showIngredientEditor.value[type] = true
@@ -376,7 +391,7 @@ const editExistingMeal = async (meal) => {
           quantity: ing.quantity,
         }))
       }
-    } catch (e) { console.error(e) }
+    } catch (e) { toast('Network error', 'error') }
   }
 
   editingMealId.value = meal.id
@@ -492,16 +507,18 @@ const saveChanges = async () => {
     await fetchMealPlan()
     closeModal()
   } catch (e) {
-    console.error(e)
-    alert('Error saving changes')
+    toast('Failed to save changes', 'error')
   } finally {
     isSaving.value = false
   }
 }
 
-const cookMeal = async (meal) => {
-  const displayName = meal.custom_name || meal.recipe_name || 'this meal'
-  if (!confirm(`Mark "${displayName}" as cooked? This will deduct ingredients from inventory.`)) return
+const cookMeal = (meal) => {
+  confirmCookMeal.value = meal
+}
+const confirmCookMealItem = async () => {
+  const meal = confirmCookMeal.value
+  confirmCookMeal.value = null
   try {
     const res = await fetch('/api/mealplan/cook', {
       method: 'POST',
@@ -510,11 +527,13 @@ const cookMeal = async (meal) => {
     })
     if (res.ok) {
       await fetchMealPlan()
+      toast('Marked as cooked! 🍳')
     } else {
-      const txt = await res.text()
-      alert('Failed: ' + txt)
+      toast('Failed to mark as cooked', 'error')
     }
-  } catch (e) { console.error(e) }
+  } catch (e) {
+    toast('Failed to mark as cooked', 'error')
+  }
 }
 
 const prevWeek = () => weekOffset.value--

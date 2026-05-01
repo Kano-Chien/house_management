@@ -53,6 +53,9 @@
 
 <script setup>
 import { ref, onMounted, computed } from 'vue'
+import { useToast } from '../composables/useToast.js'
+
+const { toast } = useToast()
 
 const autoItems = ref([])
 const customItems = ref([])
@@ -82,7 +85,7 @@ const addCustomItem = async () => {
       await fetchShoppingList()
     }
   } catch (e) {
-    console.error("Failed to add custom item", e)
+    toast('Failed to add item', 'error')
   }
 }
 
@@ -100,7 +103,7 @@ const removeItem = async (index) => {
       await fetchShoppingList()
     }
   } catch (e) {
-    console.error("Failed to delete item", e)
+    toast('Failed to delete item', 'error')
   }
 }
 
@@ -115,7 +118,7 @@ const saveList = async (item) => {
       body: JSON.stringify({ id: item.id, is_checked: item.is_checked })
     })
   } catch (e) {
-    console.error("Failed to update item check status", e)
+    toast('Failed to update item', 'error')
   }
 }
 
@@ -129,7 +132,7 @@ const fetchShoppingList = async () => {
       customItems.value = (data || []).filter(i => i.is_custom)
     }
   } catch (e) {
-    console.error("Failed to fetch shopping list", e)
+    toast('Failed to load shopping list', 'error')
   } finally {
     loading.value = false
   }
@@ -150,19 +153,18 @@ const sendToLine = async () => {
       body: JSON.stringify(itemsToSend)
     })
     if (res.ok) {
-      alert('Shopping list broadcasted to LINE!')
+      toast('Shopping list sent to LINE! 💬')
     } else {
       const text = await res.text()
       try {
         const err = JSON.parse(text)
-        alert('Failed: ' + (err.message || text))
-      } catch (e) {
-        alert('Failed: ' + text)
+        toast('Failed to send: ' + (err.message || text), 'error')
+      } catch {
+        toast('Failed to send: ' + text, 'error')
       }
     }
   } catch (e) {
-    console.error(e)
-    alert('Error sending to LINE: ' + e.message)
+    toast('Error sending to LINE: ' + e.message, 'error')
   } finally {
     sending.value = false
   }
