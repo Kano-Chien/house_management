@@ -161,12 +161,24 @@
         </div>
       </div>
     </div>
+
+    <ConfirmDialog
+      v-if="confirmDeleteRecipe"
+      :message="`Delete recipe &quot;${confirmDeleteRecipe.name}&quot;? This cannot be undone.`"
+      @confirm="confirmDeleteRecipeItem"
+      @cancel="confirmDeleteRecipe = null"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted, nextTick } from 'vue'
 import StepEditor from './StepEditor.vue'
+import ConfirmDialog from './ui/ConfirmDialog.vue'
+import { useToast } from '../composables/useToast.js'
+
+const { toast } = useToast()
+const confirmDeleteRecipe = ref(null)
 
 const recipes = ref([])
 const newRecipeName = ref('')
@@ -233,7 +245,7 @@ const saveRecipeName = async (recipe) => {
     if (res.ok) {
       recipe.name = editNameValue.value
     }
-  } catch (e) { console.error(e) }
+  } catch (e) { toast('Failed to save recipe name', 'error') }
   editingNameId.value = null
 }
 
@@ -244,7 +256,7 @@ const saveNotes = async (recipe) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: recipe.id, name: recipe.name, notes: recipe.notes || '' })
     })
-  } catch (e) { console.error(e) }
+  } catch (e) { toast('Failed to save notes', 'error') }
 }
 
 // ---- Ingredient Quantity Editing ----
@@ -277,7 +289,7 @@ const saveIngredientQty = async (recipeId, ing) => {
         if (tagIng) tagIng.quantity = editQtyValue.value
       }
     }
-  } catch (e) { console.error(e) }
+  } catch (e) { toast('Failed to save quantity', 'error') }
   editingQty.value = null
 }
 
@@ -311,7 +323,7 @@ const saveIngredientName = async (recipeId, ing) => {
       const recipe = recipes.value.find(r => r.id === recipeId)
       if (recipe) recipe._ingredients = [...recipeIngredients.value]
     }
-  } catch (e) { console.error(e) }
+  } catch (e) { toast('Failed to save ingredient name', 'error') }
   editingIngName.value = null
 }
 
@@ -330,7 +342,7 @@ const fetchRecipes = async () => {
             }))
             recipes.value = data
         }
-    } catch (e) { console.error(e) }
+    } catch (e) { toast('Failed to load recipes', 'error') }
 }
 
 const addRecipe = async () => {
@@ -345,22 +357,31 @@ const addRecipe = async () => {
             await fetchRecipes()
             newRecipeName.value = ''
         }
-    } catch (e) { console.error(e) }
+    } catch (e) { toast('Failed to add recipe', 'error') }
 }
 
-const deleteRecipe = async (recipe) => {
-    if (!confirm(`Delete "${recipe.name}"?`)) return
-    try {
-        const res = await fetch('/api/recipes/delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: recipe.id })
-        })
-        if (res.ok) {
-            if (expandedId.value === recipe.id) expandedId.value = null
-            await fetchRecipes()
-        }
-    } catch (e) { console.error(e) }
+const deleteRecipe = (recipe) => {
+  confirmDeleteRecipe.value = recipe
+}
+const confirmDeleteRecipeItem = async () => {
+  const recipe = confirmDeleteRecipe.value
+  confirmDeleteRecipe.value = null
+  try {
+    const res = await fetch('/api/recipes/delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: recipe.id })
+    })
+    if (res.ok) {
+      if (expandedId.value === recipe.id) expandedId.value = null
+      await fetchRecipes()
+      toast(`"${recipe.name}" deleted`)
+    } else {
+      toast('Failed to delete recipe', 'error')
+    }
+  } catch (e) {
+    toast('Failed to delete recipe', 'error')
+  }
 }
 
 const toggleRecipe = async (id) => {
@@ -376,7 +397,7 @@ const fetchRecipeIngredients = async (recipeId) => {
     try {
         const res = await fetch(`/api/recipes/ingredients?recipe_id=${recipeId}`)
         if (res.ok) recipeIngredients.value = (await res.json()) || []
-    } catch (e) { console.error(e) }
+    } catch (e) { toast('Network error', 'error') }
 }
 
 const addIngredientToRecipe = async (recipeId) => {
@@ -399,7 +420,7 @@ const addIngredientToRecipe = async (recipeId) => {
             if (recipe) recipe._ingredients = [...recipeIngredients.value]
             addIngForm.value = { new_name: '', quantity: 1, is_tracked: true }
         }
-    } catch (e) { console.error(e) }
+    } catch (e) { toast('Network error', 'error') }
 }
 
 const removeIngredient = async (recipeId, ingredientId) => {
@@ -414,7 +435,7 @@ const removeIngredient = async (recipeId, ingredientId) => {
             const recipe = recipes.value.find(r => r.id === recipeId)
             if (recipe) recipe._ingredients = [...recipeIngredients.value]
         }
-    } catch (e) { console.error(e) }
+    } catch (e) { toast('Network error', 'error') }
 }
 
 onMounted(fetchRecipes)
