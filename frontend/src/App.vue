@@ -1,69 +1,53 @@
 <template>
   <div class="min-h-screen bg-gray-50 font-sans text-gray-900">
-    <!-- Header / Nav -->
-    <nav style="background-color: #E0E0E0;" class="text-gray-800 p-4 shadow-md sticky top-0 z-50">
-      <div class="max-w-4xl mx-auto flex justify-between items-center">
-        <h1 class="text-xl font-bold">🏠 Home Inventory</h1>
-        <!-- Desktop Nav -->
-        <div class="hidden md:flex gap-4">
-          <button 
-            @click="currentTab = 'inventory'"
-            :class="['px-3 py-1 rounded font-medium transition-colors', currentTab === 'inventory' ? 'bg-gray-700 text-white' : 'hover:bg-gray-300']"
-          >Inventory</button>
-          <button 
-            @click="currentTab = 'recipes'"
-             :class="['px-3 py-1 rounded font-medium transition-colors', currentTab === 'recipes' ? 'bg-gray-700 text-white' : 'hover:bg-gray-300']"
-          >Recipes</button>
-          <button 
-            @click="currentTab = 'planning'"
-             :class="['px-3 py-1 rounded font-medium transition-colors', currentTab === 'planning' ? 'bg-gray-700 text-white' : 'hover:bg-gray-300']"
-          >Meal Plan</button>
-          <button 
-            @click="currentTab = 'shopping'"
-             :class="['px-3 py-1 rounded font-medium transition-colors', currentTab === 'shopping' ? 'bg-gray-700 text-white' : 'hover:bg-gray-300']"
-          >Shopping</button>
+    <!-- Toast layer (global) -->
+    <AppToast />
+
+    <!-- Header -->
+    <nav class="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
+      <div class="max-w-4xl mx-auto px-4 h-14 flex items-center justify-between">
+        <h1 class="text-base font-bold text-gray-900">🏠 Home</h1>
+        <!-- Desktop nav -->
+        <div class="hidden md:flex gap-1 bg-gray-100 rounded-xl p-1">
+          <button
+            v-for="tab in tabs" :key="tab.id"
+            @click="currentTab = tab.id"
+            :class="[
+              'px-4 py-1.5 rounded-lg text-sm font-medium transition-all',
+              currentTab === tab.id
+                ? 'bg-white text-primary-600 shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            ]"
+          >{{ tab.label }}</button>
         </div>
       </div>
     </nav>
 
-    <!-- Mobile Bottom Nav -->
-    <nav class="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 flex justify-around p-2 z-50 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
-      <button 
-        @click="currentTab = 'inventory'"
-        :class="['flex flex-col items-center p-2 rounded-lg transition-colors w-full', currentTab === 'inventory' ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600']"
+    <!-- Mobile bottom nav -->
+    <nav class="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-gray-200 flex z-40 shadow-[0_-2px_10px_rgba(0,0,0,0.05)]">
+      <button
+        v-for="tab in tabs" :key="tab.id"
+        @click="currentTab = tab.id"
+        :class="[
+          'flex flex-col items-center justify-center gap-1 flex-1 py-2 transition-colors',
+          currentTab === tab.id ? 'text-primary-600' : 'text-gray-400'
+        ]"
       >
-        <span class="text-xl leading-none">📦</span>
-        <span class="text-[10px] font-medium mt-1">Inventory</span>
-      </button>
-      <button 
-        @click="currentTab = 'recipes'"
-        :class="['flex flex-col items-center p-2 rounded-lg transition-colors w-full', currentTab === 'recipes' ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600']"
-      >
-        <span class="text-xl leading-none">📖</span>
-        <span class="text-[10px] font-medium mt-1">Recipes</span>
-      </button>
-      <button 
-        @click="currentTab = 'planning'"
-        :class="['flex flex-col items-center p-2 rounded-lg transition-colors w-full', currentTab === 'planning' ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600']"
-      >
-        <span class="text-xl leading-none">📅</span>
-        <span class="text-[10px] font-medium mt-1">Plan</span>
-      </button>
-      <button 
-        @click="currentTab = 'shopping'"
-        :class="['flex flex-col items-center p-2 rounded-lg transition-colors w-full', currentTab === 'shopping' ? 'text-blue-600' : 'text-gray-400 hover:text-gray-600']"
-      >
-        <span class="text-xl leading-none">🛒</span>
-        <span class="text-[10px] font-medium mt-1">Shop</span>
+        <span class="text-xl leading-none">{{ tab.icon }}</span>
+        <span class="text-[10px] font-medium">{{ tab.label }}</span>
+        <span
+          v-if="currentTab === tab.id"
+          class="w-1 h-1 rounded-full bg-primary-500"
+        />
       </button>
     </nav>
 
-    <!-- Main Content -->
-    <main class="max-w-4xl mx-auto mt-6 pb-24 md:pb-6">
-      <InventoryTable v-if="currentTab === 'inventory'" />
-      <RecipeManager v-if="currentTab === 'recipes'" />
-      <MealPlanner v-if="currentTab === 'planning'" />
-      <ShoppingList v-if="currentTab === 'shopping'" />
+    <!-- Main content — v-show keeps components mounted between tab switches -->
+    <main class="max-w-4xl mx-auto pb-24 md:pb-8 px-0">
+      <InventoryTable v-show="currentTab === 'inventory'" />
+      <RecipeManager  v-show="currentTab === 'recipes'"   />
+      <MealPlanner    v-show="currentTab === 'planning'"  />
+      <ShoppingList   v-show="currentTab === 'shopping'"  />
     </main>
   </div>
 </template>
@@ -71,17 +55,19 @@
 <script setup>
 import { ref, watch } from 'vue'
 import InventoryTable from './components/InventoryTable.vue'
-import RecipeManager from './components/RecipeManager.vue'
-import MealPlanner from './components/MealPlanner.vue'
-import ShoppingList from './components/ShoppingList.vue'
+import RecipeManager  from './components/RecipeManager.vue'
+import MealPlanner    from './components/MealPlanner.vue'
+import ShoppingList   from './components/ShoppingList.vue'
+import AppToast       from './components/ui/AppToast.vue'
+
+const tabs = [
+  { id: 'inventory', label: 'Inventory', icon: '📦' },
+  { id: 'recipes',   label: 'Recipes',   icon: '📖' },
+  { id: 'planning',  label: 'Meal Plan', icon: '📅' },
+  { id: 'shopping',  label: 'Shopping',  icon: '🛒' },
+]
 
 const savedTab = localStorage.getItem('house_app_tab')
 const currentTab = ref(savedTab || 'inventory')
-
-watch(currentTab, (newTab) => {
-  localStorage.setItem('house_app_tab', newTab)
-})
+watch(currentTab, t => localStorage.setItem('house_app_tab', t))
 </script>
-
-<style>
-</style>
