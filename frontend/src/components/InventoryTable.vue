@@ -2,23 +2,10 @@
   <div class="p-6">
     <div class="flex items-center justify-between mb-4">
       <h2 class="text-2xl font-bold">Inventory</h2>
-      <div class="flex gap-2">
-        <button @click="showStockInModal = true"
-          class="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-green-500 text-white hover:bg-green-600 shadow-sm hover:shadow transition-all duration-200">
-          + Stock In
-        </button>
-        <button @click="showAddForm = !showAddForm"
-          :class="[
-            'flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200',
-            showAddForm
-              ? 'bg-gray-200 text-gray-600 hover:bg-gray-300'
-              : 'bg-blue-500 text-white hover:bg-blue-600 shadow-sm hover:shadow'
-          ]">
-          <span class="text-lg leading-none transition-transform duration-200"
-            :style="{ transform: showAddForm ? 'rotate(45deg)' : 'rotate(0)' }">+</span>
-          {{ showAddForm ? 'Close' : 'Add Item' }}
-        </button>
-      </div>
+      <button @click="showStockInModal = true"
+        class="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-green-500 text-white hover:bg-green-600 shadow-sm hover:shadow transition-all duration-200">
+        + Stock In
+      </button>
     </div>
 
     <!-- Loading skeleton -->
@@ -40,51 +27,6 @@
         ]"
       >{{ opt.label }}</button>
     </div>
-
-    <!-- Add Form (Collapsible) -->
-    <Transition name="slide">
-      <div v-if="showAddForm" class="mb-6 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-100 shadow-sm">
-        <div class="flex gap-2 flex-wrap items-end">
-          <div class="flex flex-col gap-1">
-            <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Name</label>
-            <input ref="nameInputRef" v-model="newItem.name" placeholder="e.g. Chicken, Soap..."
-              @keyup.enter="addItem"
-              class="border border-gray-200 p-2 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition-all w-full md:w-40" />
-          </div>
-          <div class="flex flex-col gap-1">
-            <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Stock</label>
-            <input v-model.number="newItem.current_stock" type="number" placeholder="0"
-              @keyup.enter="addItem"
-              class="border border-gray-200 p-2 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition-all w-full md:w-20" />
-          </div>
-          <div class="flex flex-col gap-1">
-            <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Price</label>
-            <input v-model.number="newItem.price" type="number" step="1" min="0" placeholder="$0"
-              @keyup.enter="addItem"
-              class="border border-gray-200 p-2 rounded-lg focus:ring-2 focus:ring-blue-400 focus:border-blue-400 focus:outline-none transition-all w-full md:w-20" />
-          </div>
-          <div class="flex flex-col gap-1">
-            <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Category</label>
-            <select v-model="newItem.category" class="border border-gray-200 p-2 rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none transition-all">
-              <option value="food">🍖 Food</option>
-              <option value="daily">🧴 Daily</option>
-            </select>
-          </div>
-          <button @click="addItem"
-            :disabled="!newItem.name || adding"
-            :class="[
-              'px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200 w-full md:w-auto',
-              adding
-                ? 'bg-green-500 text-white scale-95'
-                : !newItem.name
-                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  : 'bg-blue-500 text-white hover:bg-blue-600 shadow-sm hover:shadow'
-            ]">
-            {{ adding ? '✓ Added!' : 'Add' }}
-          </button>
-        </div>
-      </div>
-    </Transition>
 
     <!-- Search bar -->
     <div class="relative mb-3">
@@ -203,6 +145,7 @@
       v-if="showBatchEditModal"
       title="Edit Batch"
       max-width="max-w-xs"
+      z-index="z-[60]"
       @close="showBatchEditModal = false"
     >
       <div class="p-5 space-y-4">
@@ -227,40 +170,99 @@
 
     <!-- Stock In Modal -->
     <AppModal v-if="showStockInModal" title="Stock In" max-width="max-w-lg" @close="showStockInModal = false">
-      <div class="px-5 pt-4 grid grid-cols-[1fr_64px_120px_28px] gap-2 text-xs font-medium text-gray-400 uppercase tracking-wide">
-        <span>Item</span><span>Qty</span><span>Expiry (optional)</span><span></span>
-      </div>
-      <div class="px-5 py-3 space-y-2">
+      <div class="px-5 py-4 space-y-3">
         <div v-for="(row, idx) in stockInRows" :key="idx"
-          class="grid grid-cols-[1fr_64px_120px_28px] gap-2 items-center">
-          <select v-model="row.ingredient_id"
-            class="border border-gray-200 p-2 rounded-lg bg-white text-sm focus:ring-2 focus:ring-green-400 focus:outline-none">
-            <option value="" disabled>Select item</option>
-            <option v-for="item in inventory" :key="item.id" :value="item.id">{{ item.name }}</option>
-          </select>
-          <input v-model.number="row.quantity" type="number" min="1" placeholder="1"
-            class="border border-gray-200 p-2 rounded-lg text-sm focus:ring-2 focus:ring-green-400 focus:outline-none w-full" />
-          <input v-model="row.expiry_date" type="date"
-            class="border border-gray-200 p-2 rounded-lg text-sm focus:ring-2 focus:ring-green-400 focus:outline-none w-full" />
-          <button @click="stockInRows.splice(idx, 1)"
-            class="text-gray-300 hover:text-red-400 transition-colors text-lg leading-none font-medium">✕</button>
+          class="relative bg-gray-50 rounded-xl p-3.5 border border-gray-100">
+          <!-- Remove button -->
+          <button v-if="stockInRows.length > 1" @click="stockInRows.splice(idx, 1)"
+            class="absolute top-2.5 right-2.5 w-5 h-5 flex items-center justify-center rounded-full text-gray-300 hover:text-red-400 hover:bg-red-50 transition-all text-[10px] font-bold leading-none">✕</button>
+          <!-- Item selector (combobox) -->
+          <div class="mb-2.5 pr-6">
+            <label class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1 block">
+              Item
+              <span v-if="row.is_new" class="ml-1.5 normal-case font-normal text-[9px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">New</span>
+            </label>
+            <div class="relative">
+              <input
+                v-model="row.searchText"
+                @input="onComboInput(idx)"
+                @focus="row.dropdownOpen = true"
+                @blur="scheduleCloseDropdown(idx)"
+                placeholder="Search or create item…"
+                :class="['w-full border px-3 py-2 rounded-lg bg-white text-sm focus:ring-2 focus:outline-none transition-all',
+                  row.is_new ? 'border-green-300 bg-green-50 focus:ring-green-400 focus:border-green-400' : 'border-gray-200 focus:ring-green-400 focus:border-green-400']"
+                autocomplete="off"
+              />
+              <div v-if="row.dropdownOpen"
+                class="absolute z-50 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg overflow-hidden max-h-48 overflow-y-auto">
+                <div v-for="item in filteredForRow(row)" :key="item.id"
+                  @mousedown.prevent="selectExistingItem(idx, item)"
+                  class="px-3 py-2 text-sm hover:bg-gray-50 cursor-pointer flex items-center gap-2">
+                  <span>{{ item.category === 'food' ? '🍖' : '🧴' }}</span>{{ item.name }}
+                </div>
+                <div v-if="row.searchText.trim() && !hasExactMatch(row)"
+                  @mousedown.prevent="selectNewItem(idx)"
+                  class="px-3 py-2 text-sm font-semibold text-green-600 bg-green-50 hover:bg-green-100 cursor-pointer flex items-center gap-2 border-t border-gray-100">
+                  <span class="text-base leading-none">＋</span> Create "{{ row.searchText.trim() }}"
+                </div>
+                <div v-if="!row.searchText.trim() && !inventory.length" class="px-3 py-2 text-sm text-gray-400 italic">No items yet</div>
+              </div>
+            </div>
+            <!-- New item: category -->
+            <div v-if="row.is_new" class="mt-2 p-2.5 bg-green-50 border border-green-100 rounded-lg">
+              <div class="text-[10px] font-semibold text-green-600 uppercase tracking-wider mb-1.5">Category</div>
+              <div class="flex border border-green-200 rounded-lg overflow-hidden text-xs font-semibold">
+                <button @mousedown.prevent="row.new_category = 'food'"
+                  :class="['px-3 py-1.5 transition-colors', row.new_category === 'food' ? 'bg-green-500 text-white' : 'bg-white text-gray-400 hover:bg-gray-50']">
+                  🍖 Food
+                </button>
+                <button @mousedown.prevent="row.new_category = 'daily'"
+                  :class="['px-3 py-1.5 transition-colors border-l border-green-200', row.new_category === 'daily' ? 'bg-green-500 text-white' : 'bg-white text-gray-400 hover:bg-gray-50']">
+                  🧴 Daily
+                </button>
+              </div>
+            </div>
+          </div>
+          <!-- Qty stepper + Expiry -->
+          <div class="flex items-end gap-3">
+            <div class="flex-shrink-0">
+              <label class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1 block">Qty</label>
+              <div class="flex items-center border border-gray-200 rounded-lg overflow-hidden bg-white">
+                <button @click="row.quantity = Math.max(1, (row.quantity || 1) - 1)"
+                  class="px-2.5 py-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors text-sm font-bold select-none">−</button>
+                <input v-model.number="row.quantity" type="number" min="1"
+                  class="w-10 text-center text-sm font-semibold border-x border-gray-200 focus:outline-none bg-white py-2 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none" />
+                <button @click="row.quantity = (row.quantity || 0) + 1"
+                  class="px-2.5 py-2 text-gray-400 hover:bg-gray-100 hover:text-gray-700 transition-colors text-sm font-bold select-none">+</button>
+              </div>
+            </div>
+            <div class="flex-1">
+              <label class="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1 block">
+                Expiry <span class="normal-case font-normal text-gray-300">(optional)</span>
+              </label>
+              <input v-model="row.expiry_date" type="date"
+                class="w-full border border-gray-200 px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-green-400 focus:border-green-400 focus:outline-none transition-all bg-white" />
+            </div>
+          </div>
         </div>
+        <!-- Add another item button -->
+        <button @click="addStockInRow"
+          class="w-full py-3 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 hover:border-green-300 hover:text-green-600 hover:bg-green-50 transition-all duration-200 flex items-center justify-center gap-1.5 font-medium">
+          <span class="text-base leading-none">+</span> Add another item
+        </button>
       </div>
       <template #footer>
-        <div class="px-5 py-4 flex items-center justify-between gap-3">
-          <button @click="addStockInRow" class="text-sm text-green-600 hover:text-green-700 font-medium transition-colors">+ Add row</button>
-          <div class="flex gap-2">
-            <AppButton variant="secondary" @click="showStockInModal = false">Cancel</AppButton>
-            <button @click="submitStockIn" :disabled="stockInSubmitting || !stockInValid"
-              :class="[
-                'px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200',
-                stockInSubmitting ? 'bg-green-500 text-white scale-95'
-                  : !stockInValid ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                  : 'bg-green-500 text-white hover:bg-green-600 shadow-sm'
-              ]">
-              {{ stockInSubmitting ? '✓ Done!' : 'Confirm' }}
-            </button>
-          </div>
+        <div class="px-5 py-4 flex items-center justify-end gap-2">
+          <AppButton variant="secondary" @click="showStockInModal = false">Cancel</AppButton>
+          <button @click="submitStockIn" :disabled="stockInSubmitting || !stockInValid"
+            :class="[
+              'px-5 py-2 rounded-lg text-sm font-semibold transition-all duration-200',
+              stockInSubmitting ? 'bg-green-500 text-white scale-95'
+                : !stockInValid ? 'bg-gray-100 text-gray-300 cursor-not-allowed'
+                : 'bg-green-500 text-white hover:bg-green-600 shadow-sm hover:shadow-md hover:-translate-y-px active:translate-y-0'
+            ]">
+            {{ stockInSubmitting ? '✓ Stocked in!' : 'Confirm Stock In' }}
+          </button>
         </div>
       </template>
     </AppModal>
@@ -286,7 +288,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import ConfirmDialog from './ui/ConfirmDialog.vue'
 import AppButton from './ui/AppButton.vue'
 import AppModal from './ui/AppModal.vue'
@@ -305,11 +307,7 @@ const SortIcon = {
 
 const loading = ref(true)
 const inventory = ref([])
-const newItem = ref({ name: '', current_stock: 0, price: 0, category: 'food', is_tracked: true })
-const showAddForm = ref(false)
-const adding = ref(false)
 const justAdded = ref(null)
-const nameInputRef = ref(null)
 
 // Edit modal
 const showEditModal = ref(false)
@@ -370,6 +368,7 @@ const startBatchEdit = (batch) => {
 }
 
 const saveBatchEdit = async () => {
+  if (!editingBatch.value.id) return
   try {
     const res = await fetch('/api/inventory/batches', {
       method: 'PUT',
@@ -429,21 +428,69 @@ const toggleSort = (field) => {
 const showStockInModal = ref(false)
 const stockInRows = ref([])
 const stockInSubmitting = ref(false)
-const addStockInRow = () => stockInRows.value.push({ ingredient_id: '', quantity: 1, expiry_date: '' })
+
+const emptyStockInRow = () => ({ ingredient_id: '', quantity: 1, expiry_date: '', searchText: '', dropdownOpen: false, is_new: false, new_name: '', new_category: 'food' })
+const addStockInRow = () => stockInRows.value.push(emptyStockInRow())
+
+const filteredForRow = (row) => {
+  const q = row.searchText.toLowerCase().trim()
+  if (!q) return inventory.value.slice(0, 8)
+  return inventory.value.filter(i => i.name.toLowerCase().includes(q)).slice(0, 6)
+}
+const hasExactMatch = (row) => inventory.value.some(i => i.name.toLowerCase() === row.searchText.trim().toLowerCase())
+const onComboInput = (idx) => {
+  const row = stockInRows.value[idx]
+  row.dropdownOpen = true
+  if (row.is_new) row.new_name = row.searchText
+  else row.ingredient_id = ''
+}
+const selectExistingItem = (idx, item) => {
+  const row = stockInRows.value[idx]
+  row.ingredient_id = item.id
+  row.searchText = item.name
+  row.is_new = false
+  row.new_name = ''
+  row.dropdownOpen = false
+}
+const selectNewItem = (idx) => {
+  const row = stockInRows.value[idx]
+  row.is_new = true
+  row.new_name = row.searchText.trim()
+  row.ingredient_id = ''
+  row.dropdownOpen = false
+}
+const scheduleCloseDropdown = (idx) => {
+  setTimeout(() => { if (stockInRows.value[idx]) stockInRows.value[idx].dropdownOpen = false }, 150)
+}
+
 const stockInValid = computed(() =>
-  stockInRows.value.length > 0 && stockInRows.value.every(r => r.ingredient_id !== '' && r.quantity > 0)
+  stockInRows.value.length > 0 && stockInRows.value.every(r =>
+    r.is_new ? r.new_name.trim() !== '' && r.quantity > 0 : r.ingredient_id !== '' && r.quantity > 0
+  )
 )
 watch(showStockInModal, (val) => {
-  if (val) stockInRows.value = [{ ingredient_id: '', quantity: 1, expiry_date: '' }]
+  if (val) stockInRows.value = [emptyStockInRow()]
 })
 const submitStockIn = async () => {
   if (!stockInValid.value || stockInSubmitting.value) return
   stockInSubmitting.value = true
   try {
+    for (const row of stockInRows.value) {
+      if (row.is_new) {
+        const res = await fetch('/api/inventory', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: row.new_name, category: row.new_category, is_tracked: true, current_stock: 0, price: 0 })
+        })
+        if (!res.ok) throw new Error('Failed to create item')
+        const created = await res.json()
+        row.ingredient_id = created.id
+      }
+    }
     const res = await fetch('/api/inventory/stock-in', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items: stockInRows.value })
+      body: JSON.stringify({ items: stockInRows.value.map(r => ({ ingredient_id: r.ingredient_id, quantity: r.quantity, expiry_date: r.expiry_date })) })
     })
     if (res.ok) {
       await fetchInventory()
@@ -508,9 +555,6 @@ const isExpiringSoon = (d) => { if (!d) return false; const diff = (new Date(d +
 const isExpired = (d) => { if (!d) return false; return new Date(d + 'T00:00:00') < today() }
 const formatExpiry = (d) => { if (!d) return '—'; const [, m, day] = d.split('-'); return `${parseInt(m)}/${parseInt(day)}` }
 
-// Auto-focus name input
-watch(showAddForm, async (val) => { if (val) { await nextTick(); nameInputRef.value?.focus() } })
-
 const fetchInventory = async () => {
   try {
     const res = await fetch('/api/inventory')
@@ -519,31 +563,6 @@ const fetchInventory = async () => {
     toast('Failed to load inventory', 'error')
   } finally {
     loading.value = false
-  }
-}
-
-const addItem = async () => {
-  if (!newItem.value.name || adding.value) return
-  adding.value = true
-  try {
-    const res = await fetch('/api/inventory', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newItem.value)
-    })
-    if (res.ok) {
-      const added = await res.json()
-      await fetchInventory()
-      justAdded.value = added.id
-      setTimeout(() => { justAdded.value = null }, 1500)
-      newItem.value = { name: '', current_stock: 0, price: 0, category: newItem.value.category, is_tracked: true }
-      await nextTick()
-      nameInputRef.value?.focus()
-    }
-  } catch (e) {
-    toast('Failed to add item', 'error')
-  } finally {
-    setTimeout(() => { adding.value = false }, 600)
   }
 }
 
@@ -575,16 +594,6 @@ onMounted(fetchInventory)
 </script>
 
 <style scoped>
-.slide-enter-active, .slide-leave-active {
-  transition: all 0.25s ease;
-  overflow: hidden;
-}
-.slide-enter-from, .slide-leave-to {
-  opacity: 0; max-height: 0; padding-top: 0; padding-bottom: 0; margin-bottom: 0;
-}
-.slide-enter-to, .slide-leave-from {
-  opacity: 1; max-height: 200px;
-}
 .fade-enter-active, .fade-leave-active { transition: opacity 0.2s ease; }
 .fade-enter-from, .fade-leave-to { opacity: 0; }
 </style>

@@ -1,28 +1,42 @@
 <script setup>
-import { onMounted, onUnmounted } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 
 const props = defineProps({
   title: String,
   maxWidth: { type: String, default: 'max-w-md' },
+  zIndex: { type: String, default: 'z-50' },
 })
 const emit = defineEmits(['close'])
 
+const panelEl = ref(null)
+
+const modalStack = (() => {
+  if (!window.__appModalStack) window.__appModalStack = []
+  return window.__appModalStack
+})()
+
 function onKey(e) {
-  if (e.key === 'Escape') emit('close')
+  if (e.key === 'Escape' && modalStack[modalStack.length - 1] === panelEl.value) {
+    emit('close')
+  }
 }
 
 onMounted(() => {
+  modalStack.push(panelEl.value)
   document.addEventListener('keydown', onKey)
   document.body.style.overflow = 'hidden'
 })
+
 onUnmounted(() => {
+  const idx = modalStack.indexOf(panelEl.value)
+  if (idx > -1) modalStack.splice(idx, 1)
   document.removeEventListener('keydown', onKey)
-  document.body.style.overflow = ''
+  if (modalStack.length === 0) document.body.style.overflow = ''
 })
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+  <div :class="['fixed inset-0 flex items-center justify-center p-4', zIndex]">
     <!-- Backdrop -->
     <div
       class="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -30,6 +44,7 @@ onUnmounted(() => {
     />
     <!-- Panel -->
     <div
+      ref="panelEl"
       role="dialog"
       aria-modal="true"
       :aria-label="title"
