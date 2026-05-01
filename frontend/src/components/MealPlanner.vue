@@ -9,8 +9,13 @@
       <button @click="nextWeek" class="bg-white border border-gray-200 px-4 py-2 rounded-xl hover:bg-gray-50 transition-colors shadow-sm font-medium text-gray-600">Next →</button>
     </div>
 
+    <!-- Loading skeleton -->
+    <div v-if="loading" class="grid grid-cols-1 md:grid-cols-7 gap-3 mt-4">
+      <div v-for="i in 7" :key="i" class="h-32 bg-gray-100 rounded-2xl animate-pulse" />
+    </div>
+
     <!-- Weekly Calendar Grid -->
-    <div class="grid grid-cols-1 md:grid-cols-7 gap-3 pb-24 md:pb-0">
+    <div v-else class="grid grid-cols-1 md:grid-cols-7 gap-3 pb-24 md:pb-0">
       <!-- Day Headers -->
       <div v-for="day in weekDays" :key="day.dateStr"
            class="text-center">
@@ -190,6 +195,7 @@ import { useToast } from '../composables/useToast.js'
 const { toast } = useToast()
 const confirmCookMeal = ref(null)
 
+const loading = ref(true)
 const mealPlan = ref([])
 const recipes = ref([])
 const inventory = ref([])
@@ -294,6 +300,7 @@ const fetchMealPlan = async () => {
     const res = await fetch('/api/mealplan')
     if (res.ok) mealPlan.value = (await res.json()) || []
   } catch (e) { toast('Network error', 'error') }
+  finally { loading.value = false }
 }
 
 const fetchInventory = async () => {

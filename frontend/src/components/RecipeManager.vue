@@ -15,6 +15,12 @@
       </div>
     </div>
 
+    <!-- Loading skeleton -->
+    <div v-if="loading" class="grid md:grid-cols-2 gap-4 mt-4">
+      <div v-for="i in 4" :key="i" class="h-40 bg-gray-100 rounded-2xl animate-pulse" />
+    </div>
+
+    <template v-else>
     <!-- Empty State -->
     <div v-if="recipes.length === 0" class="text-center py-16">
       <div class="text-6xl mb-4">📖</div>
@@ -161,6 +167,7 @@
         </div>
       </div>
     </div>
+    </template>
 
     <ConfirmDialog
       v-if="confirmDeleteRecipe"
@@ -180,6 +187,7 @@ import { useToast } from '../composables/useToast.js'
 const { toast } = useToast()
 const confirmDeleteRecipe = ref(null)
 
+const loading = ref(true)
 const recipes = ref([])
 const newRecipeName = ref('')
 
@@ -343,6 +351,7 @@ const fetchRecipes = async () => {
             recipes.value = data
         }
     } catch (e) { toast('Failed to load recipes', 'error') }
+    finally { loading.value = false }
 }
 
 const addRecipe = async () => {
