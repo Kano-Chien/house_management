@@ -86,232 +86,184 @@
       </div>
     </Transition>
 
-    <!-- Inventory Table -->
-    <div class="bg-white rounded-xl shadow overflow-x-auto">
-      <table class="w-full text-left">
-        <thead class="bg-gray-50">
-          <tr>
-            <th class="p-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-              <button @click="toggleSort('name')" class="flex items-center gap-1 hover:text-gray-700 transition-colors">
-                Name <SortIcon :active="sortBy === 'name'" :dir="sortDir" />
-              </button>
-            </th>
-            <th class="p-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Category</th>
-            <th class="p-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Stock</th>
-            <th class="p-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Consume</th>
-            <th class="p-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">
-              <button @click="toggleSort('expiry')" class="flex items-center gap-1 hover:text-gray-700 transition-colors">
-                Expiry <SortIcon :active="sortBy === 'expiry'" :dir="sortDir" />
-              </button>
-            </th>
-            <th class="p-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Price</th>
-            <th class="p-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="item in sortedInventory" :key="item.id"
-            :class="['border-t transition-colors duration-150', justAdded === item.id ? 'bg-green-50' : 'hover:bg-gray-50']">
-            <td class="p-3 font-medium">{{ item.name }}</td>
-            <td class="p-3">
-              <span :class="[
-                'inline-block px-2 py-0.5 rounded-full text-xs font-medium',
-                item.category === 'food' ? 'bg-orange-100 text-orange-700' : 'bg-blue-100 text-blue-700'
-              ]">{{ item.category === 'food' ? '🍖 Food' : '🧴 Daily' }}</span>
-            </td>
-            <td class="p-3">
-              <span :class="{'text-red-500 font-bold': item.current_stock < item.planned_consumption}">
-                {{ item.current_stock }}
-              </span>
-            </td>
-            <td class="p-3 text-gray-500">{{ item.planned_consumption }}</td>
-            <td class="p-3">
-              <span v-if="item.earliest_expiry" :class="[
-                'inline-block px-2 py-0.5 rounded text-xs font-medium',
-                isExpired(item.earliest_expiry)
-                  ? 'bg-red-100 text-red-700'
-                  : isExpiringSoon(item.earliest_expiry)
-                    ? 'bg-yellow-100 text-yellow-700'
-                    : 'text-gray-600'
-              ]">
-                {{ isExpired(item.earliest_expiry) || isExpiringSoon(item.earliest_expiry) ? '⚠ ' : '' }}{{ formatExpiry(item.earliest_expiry) }}
-              </span>
-              <span v-else class="text-gray-300">—</span>
-            </td>
-            <td class="p-3">${{ item.price }}</td>
-            <td class="p-3">
-              <div class="flex gap-1">
-                <button @click="startEdit(item)" class="bg-yellow-400 text-white px-2 py-1 rounded-lg text-sm hover:bg-yellow-500 transition-colors">Edit</button>
-                <button @click="deleteItem(item)" class="bg-red-500 text-white px-2 py-1 rounded-lg text-sm hover:bg-red-600 transition-colors">Delete</button>
-              </div>
-            </td>
-          </tr>
-          <tr v-if="sortedInventory.length === 0">
-            <td colspan="7" class="p-8 text-center text-gray-400">
-              <div class="text-3xl mb-2">📦</div>
-              No items in this category
-            </td>
-          </tr>
-        </tbody>
-      </table>
+    <!-- Search bar -->
+    <div class="relative mb-3">
+      <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+      <input
+        v-model="searchQuery"
+        placeholder="Search items…"
+        class="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-400 focus:border-primary-400 focus:outline-none transition-all bg-white"
+      />
+    </div>
+
+    <!-- Card list -->
+    <div class="space-y-2">
+      <div
+        v-for="item in sortedInventory" :key="item.id"
+        :class="['flex items-center gap-3 p-3.5 bg-white rounded-2xl border border-gray-100 shadow-sm transition-all', justAdded === item.id ? 'ring-2 ring-green-300' : '']"
+      >
+        <span class="text-2xl flex-shrink-0">{{ item.category === 'food' ? '🍖' : '🧴' }}</span>
+        <div class="flex-1 min-w-0">
+          <p class="text-sm font-semibold text-gray-900 truncate">{{ item.name }}</p>
+          <p v-if="item.earliest_expiry" class="text-xs mt-0.5" :class="isExpired(item.earliest_expiry) ? 'text-red-500' : isExpiringSoon(item.earliest_expiry) ? 'text-amber-500' : 'text-gray-400'">
+            Exp {{ formatExpiry(item.earliest_expiry) }}
+          </p>
+          <p v-else class="text-xs text-gray-300 mt-0.5">No expiry</p>
+        </div>
+        <AppBadge :variant="stockStatus(item)">{{ item.current_stock }} {{ stockLabel(item) }}</AppBadge>
+        <AppButton variant="icon" size="md" @click="startEdit(item)" aria-label="Edit">✏️</AppButton>
+      </div>
+
+      <div v-if="sortedInventory.length === 0" class="py-16 text-center">
+        <div class="text-4xl mb-3">📦</div>
+        <p class="text-gray-400 text-sm">{{ searchQuery ? 'No items match your search' : 'No items in this category' }}</p>
+      </div>
     </div>
 
     <!-- Edit Modal -->
-    <Transition name="fade">
-      <div v-if="showEditModal" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" @click.self="cancelEdit">
-        <div class="bg-white rounded-2xl shadow-xl w-full max-w-md flex flex-col max-h-[90vh]">
-
-          <!-- Header -->
-          <div class="p-5 border-b flex items-center justify-between">
-            <h3 class="text-lg font-semibold">Edit — {{ editingItem?.name }}</h3>
-            <button @click="cancelEdit" class="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
+    <AppModal v-if="showEditModal" :title="`Edit — ${editingItem?.name}`" @close="cancelEdit">
+      <div class="p-5 space-y-4">
+        <div class="grid grid-cols-2 gap-3">
+          <div class="flex flex-col gap-1">
+            <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Name</label>
+            <input v-model="editForm.name"
+              class="border border-gray-200 p-2 rounded-lg focus:ring-2 focus:ring-blue-400 focus:outline-none text-sm" />
           </div>
-
-          <!-- Fields -->
-          <div class="p-5 space-y-4">
-            <div class="grid grid-cols-2 gap-3">
-              <div class="flex flex-col gap-1">
-                <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Name</label>
-                <input v-model="editForm.name"
-                  class="border border-gray-200 p-2 rounded-lg focus:ring-2 focus:ring-blue-400 focus:outline-none text-sm" />
-              </div>
-              <div class="flex flex-col gap-1">
-                <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Category</label>
-                <select v-model="editForm.category"
-                  class="border border-gray-200 p-2 rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none">
-                  <option value="food">🍖 Food</option>
-                  <option value="daily">🧴 Daily</option>
-                </select>
-              </div>
-              <div class="flex flex-col gap-1">
-                <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Price</label>
-                <input v-model.number="editForm.price" type="number" step="1" min="0"
-                  class="border border-gray-200 p-2 rounded-lg focus:ring-2 focus:ring-blue-400 focus:outline-none text-sm" />
-              </div>
-              <div class="flex flex-col gap-1 justify-end">
-                <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer pb-2">
-                  <input type="checkbox" v-model="editForm.is_tracked" class="rounded text-blue-500 focus:ring-blue-400" />
-                  Track stock level
-                </label>
-              </div>
-            </div>
-
-            <!-- Batches section -->
-            <div class="border-t pt-4">
-              <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Batches</div>
-              <div v-if="!editBatches || editBatches.length === 0" class="text-sm text-gray-400 italic">No batches recorded.</div>
-              <table v-else class="w-full text-sm">
-                <thead>
-                  <tr class="text-xs text-gray-400">
-                    <th class="text-left pb-2 pr-3 font-medium">Qty</th>
-                    <th class="text-left pb-2 pr-3 font-medium">Expiry</th>
-                    <th class="pb-2"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="batch in editBatches" :key="batch.id" class="border-t border-gray-100">
-                    <template v-if="batchEditId === batch.id">
-                      <td class="py-2 pr-3">
-                        <input v-model.number="batchEditForm.quantity" type="number" min="0"
-                          class="border p-1 rounded w-16 text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none" />
-                      </td>
-                      <td class="py-2 pr-3">
-                        <input v-model="batchEditForm.expiry_date" type="date"
-                          class="border p-1 rounded text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none" />
-                      </td>
-                      <td class="py-2">
-                        <div class="flex gap-1">
-                          <button @click="saveBatchEdit" class="bg-green-500 text-white px-2 py-0.5 rounded text-xs hover:bg-green-600">Save</button>
-                          <button @click="batchEditId = null" class="bg-gray-200 text-gray-600 px-2 py-0.5 rounded text-xs hover:bg-gray-300">Cancel</button>
-                        </div>
-                      </td>
-                    </template>
-                    <template v-else>
-                      <td class="py-2 pr-3 font-medium">{{ batch.quantity }}</td>
-                      <td class="py-2 pr-3">
-                        <span v-if="batch.expiry_date" :class="[
-                          'px-1.5 py-0.5 rounded text-xs font-medium',
-                          isExpired(batch.expiry_date)
-                            ? 'bg-red-100 text-red-700'
-                            : isExpiringSoon(batch.expiry_date)
-                              ? 'bg-yellow-100 text-yellow-700'
-                              : 'text-gray-600'
-                        ]">{{ isExpired(batch.expiry_date) || isExpiringSoon(batch.expiry_date) ? '⚠ ' : '' }}{{ formatExpiry(batch.expiry_date) }}</span>
-                        <span v-else class="text-gray-300">No expiry</span>
-                      </td>
-                      <td class="py-2">
-                        <div class="flex gap-1">
-                          <button @click="startBatchEdit(batch)" class="text-yellow-500 hover:text-yellow-600 text-xs font-medium">Edit</button>
-                          <button @click="deleteBatch(batch)" class="text-red-400 hover:text-red-600 text-xs font-medium">Delete</button>
-                        </div>
-                      </td>
-                    </template>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Category</label>
+            <select v-model="editForm.category"
+              class="border border-gray-200 p-2 rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-400 focus:outline-none">
+              <option value="food">🍖 Food</option>
+              <option value="daily">🧴 Daily</option>
+            </select>
           </div>
-
-          <!-- Footer -->
-          <div class="p-5 border-t flex justify-end gap-2">
-            <button @click="cancelEdit"
-              class="px-4 py-2 rounded-lg text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors">
-              Cancel
-            </button>
-            <button @click="saveEdit"
-              class="px-5 py-2 rounded-lg text-sm font-medium bg-blue-500 text-white hover:bg-blue-600 shadow-sm transition-colors">
-              Save
-            </button>
+          <div class="flex flex-col gap-1">
+            <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Price</label>
+            <input v-model.number="editForm.price" type="number" step="1" min="0"
+              class="border border-gray-200 p-2 rounded-lg focus:ring-2 focus:ring-blue-400 focus:outline-none text-sm" />
+          </div>
+          <div class="flex flex-col gap-1 justify-end">
+            <label class="flex items-center gap-2 text-sm text-gray-600 cursor-pointer pb-2">
+              <input type="checkbox" v-model="editForm.is_tracked" class="rounded text-blue-500 focus:ring-blue-400" />
+              Track stock level
+            </label>
           </div>
         </div>
+
+        <!-- Batches section -->
+        <div class="border-t pt-4">
+          <div class="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Batches</div>
+          <div v-if="!editBatches || editBatches.length === 0" class="text-sm text-gray-400 italic">No batches recorded.</div>
+          <table v-else class="w-full text-sm">
+            <thead>
+              <tr class="text-xs text-gray-400">
+                <th class="text-left pb-2 pr-3 font-medium">Qty</th>
+                <th class="text-left pb-2 pr-3 font-medium">Expiry</th>
+                <th class="pb-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="batch in editBatches" :key="batch.id" class="border-t border-gray-100">
+                <td class="py-2 pr-3 font-medium">{{ batch.quantity }}</td>
+                <td class="py-2 pr-3">
+                  <span v-if="batch.expiry_date" :class="[
+                    'px-1.5 py-0.5 rounded text-xs font-medium',
+                    isExpired(batch.expiry_date)
+                      ? 'bg-red-100 text-red-700'
+                      : isExpiringSoon(batch.expiry_date)
+                        ? 'bg-yellow-100 text-yellow-700'
+                        : 'text-gray-600'
+                  ]">{{ isExpired(batch.expiry_date) || isExpiringSoon(batch.expiry_date) ? '⚠ ' : '' }}{{ formatExpiry(batch.expiry_date) }}</span>
+                  <span v-else class="text-gray-300">No expiry</span>
+                </td>
+                <td class="py-2">
+                  <div class="flex gap-1">
+                    <button @click="startBatchEdit(batch)" class="text-yellow-500 hover:text-yellow-600 text-xs font-medium">Edit</button>
+                    <button @click="deleteBatch(batch)" class="text-red-400 hover:text-red-600 text-xs font-medium">Delete</button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
-    </Transition>
+      <template #footer>
+        <div class="px-5 py-4 flex items-center justify-between gap-2">
+          <AppButton variant="danger" size="sm" @click="deleteItem(editingItem)">Delete item</AppButton>
+          <div class="flex gap-2">
+            <AppButton variant="secondary" @click="cancelEdit">Cancel</AppButton>
+            <AppButton variant="primary" @click="saveEdit">Save</AppButton>
+          </div>
+        </div>
+      </template>
+    </AppModal>
+
+    <!-- Batch Edit Sub-Modal -->
+    <AppModal
+      v-if="showBatchEditModal"
+      title="Edit Batch"
+      max-width="max-w-xs"
+      @close="showBatchEditModal = false"
+    >
+      <div class="p-5 space-y-4">
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Quantity</label>
+          <input v-model.number="editingBatch.quantity" type="number" min="0"
+            class="border border-gray-200 p-2 rounded-lg focus:ring-2 focus:ring-blue-400 focus:outline-none text-sm" />
+        </div>
+        <div class="flex flex-col gap-1">
+          <label class="text-xs font-medium text-gray-500 uppercase tracking-wide">Expiry Date</label>
+          <input v-model="editingBatch.expiry_date" type="date"
+            class="border border-gray-200 p-2 rounded-lg focus:ring-2 focus:ring-blue-400 focus:outline-none text-sm" />
+        </div>
+      </div>
+      <template #footer>
+        <div class="px-5 py-4 flex justify-end gap-2">
+          <AppButton variant="secondary" @click="showBatchEditModal = false">Cancel</AppButton>
+          <AppButton variant="primary" @click="saveBatchEdit">Save Batch</AppButton>
+        </div>
+      </template>
+    </AppModal>
 
     <!-- Stock In Modal -->
-    <Transition name="fade">
-      <div v-if="showStockInModal" class="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" @click.self="showStockInModal = false">
-        <div class="bg-white rounded-2xl shadow-xl w-full max-w-lg flex flex-col max-h-[90vh]">
-          <div class="p-5 border-b flex items-center justify-between">
-            <h3 class="text-lg font-semibold">Stock In</h3>
-            <button @click="showStockInModal = false" class="text-gray-400 hover:text-gray-600 text-xl leading-none">✕</button>
-          </div>
-          <div class="px-5 pt-4 grid grid-cols-[1fr_64px_120px_28px] gap-2 text-xs font-medium text-gray-400 uppercase tracking-wide">
-            <span>Item</span><span>Qty</span><span>Expiry (optional)</span><span></span>
-          </div>
-          <div class="px-5 py-3 space-y-2 overflow-y-auto flex-1">
-            <div v-for="(row, idx) in stockInRows" :key="idx"
-              class="grid grid-cols-[1fr_64px_120px_28px] gap-2 items-center">
-              <select v-model="row.ingredient_id"
-                class="border border-gray-200 p-2 rounded-lg bg-white text-sm focus:ring-2 focus:ring-green-400 focus:outline-none">
-                <option value="" disabled>Select item</option>
-                <option v-for="item in inventory" :key="item.id" :value="item.id">{{ item.name }}</option>
-              </select>
-              <input v-model.number="row.quantity" type="number" min="1" placeholder="1"
-                class="border border-gray-200 p-2 rounded-lg text-sm focus:ring-2 focus:ring-green-400 focus:outline-none w-full" />
-              <input v-model="row.expiry_date" type="date"
-                class="border border-gray-200 p-2 rounded-lg text-sm focus:ring-2 focus:ring-green-400 focus:outline-none w-full" />
-              <button @click="stockInRows.splice(idx, 1)"
-                class="text-gray-300 hover:text-red-400 transition-colors text-lg leading-none font-medium">✕</button>
-            </div>
-          </div>
-          <div class="p-5 border-t flex items-center justify-between gap-3">
-            <button @click="addStockInRow" class="text-sm text-green-600 hover:text-green-700 font-medium transition-colors">+ Add row</button>
-            <div class="flex gap-2">
-              <button @click="showStockInModal = false"
-                class="px-4 py-2 rounded-lg text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors">Cancel</button>
-              <button @click="submitStockIn" :disabled="stockInSubmitting || !stockInValid"
-                :class="[
-                  'px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200',
-                  stockInSubmitting ? 'bg-green-500 text-white scale-95'
-                    : !stockInValid ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    : 'bg-green-500 text-white hover:bg-green-600 shadow-sm'
-                ]">
-                {{ stockInSubmitting ? '✓ Done!' : 'Confirm' }}
-              </button>
-            </div>
-          </div>
+    <AppModal v-if="showStockInModal" title="Stock In" max-width="max-w-lg" @close="showStockInModal = false">
+      <div class="px-5 pt-4 grid grid-cols-[1fr_64px_120px_28px] gap-2 text-xs font-medium text-gray-400 uppercase tracking-wide">
+        <span>Item</span><span>Qty</span><span>Expiry (optional)</span><span></span>
+      </div>
+      <div class="px-5 py-3 space-y-2">
+        <div v-for="(row, idx) in stockInRows" :key="idx"
+          class="grid grid-cols-[1fr_64px_120px_28px] gap-2 items-center">
+          <select v-model="row.ingredient_id"
+            class="border border-gray-200 p-2 rounded-lg bg-white text-sm focus:ring-2 focus:ring-green-400 focus:outline-none">
+            <option value="" disabled>Select item</option>
+            <option v-for="item in inventory" :key="item.id" :value="item.id">{{ item.name }}</option>
+          </select>
+          <input v-model.number="row.quantity" type="number" min="1" placeholder="1"
+            class="border border-gray-200 p-2 rounded-lg text-sm focus:ring-2 focus:ring-green-400 focus:outline-none w-full" />
+          <input v-model="row.expiry_date" type="date"
+            class="border border-gray-200 p-2 rounded-lg text-sm focus:ring-2 focus:ring-green-400 focus:outline-none w-full" />
+          <button @click="stockInRows.splice(idx, 1)"
+            class="text-gray-300 hover:text-red-400 transition-colors text-lg leading-none font-medium">✕</button>
         </div>
       </div>
-    </Transition>
+      <template #footer>
+        <div class="px-5 py-4 flex items-center justify-between gap-3">
+          <button @click="addStockInRow" class="text-sm text-green-600 hover:text-green-700 font-medium transition-colors">+ Add row</button>
+          <div class="flex gap-2">
+            <AppButton variant="secondary" @click="showStockInModal = false">Cancel</AppButton>
+            <button @click="submitStockIn" :disabled="stockInSubmitting || !stockInValid"
+              :class="[
+                'px-5 py-2 rounded-lg text-sm font-medium transition-all duration-200',
+                stockInSubmitting ? 'bg-green-500 text-white scale-95'
+                  : !stockInValid ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'bg-green-500 text-white hover:bg-green-600 shadow-sm'
+              ]">
+              {{ stockInSubmitting ? '✓ Done!' : 'Confirm' }}
+            </button>
+          </div>
+        </div>
+      </template>
+    </AppModal>
     </template>
 
     <!-- Confirm delete item -->
@@ -336,6 +288,9 @@
 <script setup>
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import ConfirmDialog from './ui/ConfirmDialog.vue'
+import AppButton from './ui/AppButton.vue'
+import AppModal from './ui/AppModal.vue'
+import AppBadge from './ui/AppBadge.vue'
 import { useToast } from '../composables/useToast.js'
 
 const { toast } = useToast()
@@ -361,8 +316,8 @@ const showEditModal = ref(false)
 const editingItem = ref(null)
 const editForm = ref({ name: '', price: 0, category: 'food', is_tracked: true })
 const editBatches = ref([])
-const batchEditId = ref(null)
-const batchEditForm = ref({ quantity: 1, expiry_date: '' })
+const showBatchEditModal = ref(false)
+const editingBatch = ref({ id: null, quantity: 1, expiry_date: '' })
 
 const confirmDelete = ref(null)
 const confirmDeleteBatch = ref(null)
@@ -371,15 +326,15 @@ const startEdit = async (item) => {
   editingItem.value = item
   editForm.value = { name: item.name, price: item.price, category: item.category || 'food', is_tracked: item.is_tracked }
   editBatches.value = []
-  batchEditId.value = null
+  showBatchEditModal.value = false
   showEditModal.value = true
   await loadBatches(item.id)
 }
 
 const cancelEdit = () => {
   showEditModal.value = false
+  showBatchEditModal.value = false
   editingItem.value = null
-  batchEditId.value = null
 }
 
 const saveEdit = async () => {
@@ -392,6 +347,7 @@ const saveEdit = async () => {
     if (res.ok) {
       await fetchInventory()
       showEditModal.value = false
+      showBatchEditModal.value = false
       editingItem.value = null
     }
   } catch (e) {
@@ -409,8 +365,8 @@ const loadBatches = async (ingredientId) => {
 }
 
 const startBatchEdit = (batch) => {
-  batchEditId.value = batch.id
-  batchEditForm.value = { quantity: batch.quantity, expiry_date: batch.expiry_date || '' }
+  editingBatch.value = { id: batch.id, quantity: batch.quantity, expiry_date: batch.expiry_date || '' }
+  showBatchEditModal.value = true
 }
 
 const saveBatchEdit = async () => {
@@ -418,10 +374,14 @@ const saveBatchEdit = async () => {
     const res = await fetch('/api/inventory/batches', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: batchEditId.value, ...batchEditForm.value })
+      body: JSON.stringify({
+        id: editingBatch.value.id,
+        quantity: editingBatch.value.quantity,
+        expiry_date: editingBatch.value.expiry_date,
+      })
     })
     if (res.ok) {
-      batchEditId.value = null
+      showBatchEditModal.value = false
       await loadBatches(editingItem.value.id)
       await fetchInventory()
     }
@@ -495,6 +455,21 @@ const submitStockIn = async () => {
   }
 }
 
+// Search
+const searchQuery = ref('')
+
+// Stock status helpers
+const stockStatus = (item) => {
+  if (item.current_stock === 0) return 'out'
+  if (item.current_stock < item.planned_consumption) return 'low'
+  return 'ok'
+}
+const stockLabel = (item) => {
+  if (item.current_stock === 0) return 'Out'
+  if (item.current_stock < item.planned_consumption) return 'Low'
+  return 'OK'
+}
+
 // Category filter
 const selectedCategory = ref('all')
 const filterOptions = [
@@ -503,8 +478,15 @@ const filterOptions = [
   { label: '🧴 Daily', value: 'daily' },
 ]
 const filteredInventory = computed(() => {
-  if (selectedCategory.value === 'all') return inventory.value
-  return inventory.value.filter(item => item.category === selectedCategory.value)
+  let items = inventory.value
+  if (selectedCategory.value !== 'all') {
+    items = items.filter(i => i.category === selectedCategory.value)
+  }
+  if (searchQuery.value.trim()) {
+    const q = searchQuery.value.trim().toLowerCase()
+    items = items.filter(i => i.name.toLowerCase().includes(q))
+  }
+  return items
 })
 const sortedInventory = computed(() => {
   const items = [...filteredInventory.value]
@@ -566,6 +548,7 @@ const addItem = async () => {
 }
 
 const deleteItem = (item) => {
+  showEditModal.value = false
   confirmDelete.value = item
 }
 const confirmDeleteItem = async () => {
