@@ -21,20 +21,29 @@
     </div>
 
     <template v-else>
+    <!-- Search bar -->
+    <div class="relative mb-4">
+      <span class="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+      <input
+        v-model="searchQuery"
+        placeholder="Search recipes…"
+        class="w-full pl-9 pr-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-primary-400 focus:border-primary-400 focus:outline-none transition-all bg-white"
+      />
+    </div>
+
     <!-- Empty State -->
-    <div v-if="recipes.length === 0" class="text-center py-16">
+    <div v-if="filteredRecipes.length === 0" class="text-center py-16">
       <div class="text-6xl mb-4">📖</div>
-      <p class="text-gray-400 text-lg">No recipes yet. Create your first one!</p>
+      <p class="text-gray-400 text-lg">{{ searchQuery ? 'No recipes match your search' : 'No recipes yet. Create your first one!' }}</p>
     </div>
 
     <!-- Recipe Cards Grid -->
     <div class="grid gap-6 md:grid-cols-2">
-      <div v-for="(recipe, idx) in recipes" :key="recipe.id"
+      <div v-for="recipe in filteredRecipes" :key="recipe.id"
            class="group rounded-2xl shadow-lg overflow-hidden border border-gray-100 transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
 
         <!-- Card Header -->
-        <div :class="cardColors[idx % cardColors.length]"
-             class="p-5 relative overflow-hidden">
+        <div class="bg-gradient-to-r from-primary-500 to-purple-600 p-5 relative overflow-hidden">
           <!-- Decorative circles -->
           <div class="absolute -top-6 -right-6 w-24 h-24 bg-white/10 rounded-full"></div>
           <div class="absolute -bottom-8 -left-4 w-20 h-20 bg-white/5 rounded-full"></div>
@@ -74,11 +83,13 @@
           <!-- Ingredient Tags (always visible) -->
           <div class="px-5 pt-4 pb-1 flex flex-wrap gap-1.5 cursor-pointer" @click="toggleRecipe(recipe.id)">
             <span v-for="ing in sortedIngs(recipe._ingredients)" :key="ing.ingredient_id"
-                  :class="ing.is_tracked === false
-                    ? 'bg-gradient-to-r from-amber-50 to-orange-50 text-amber-700 border-amber-200'
-                    : 'bg-gradient-to-r from-gray-50 to-gray-100 text-gray-600 border-gray-200'"
-                  class="px-3 py-1 rounded-full text-xs font-medium border shadow-sm">
-              {{ ing.name }} × {{ ing.quantity }}
+                  :class="[
+                    'inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border',
+                    ing.is_tracked !== false
+                      ? 'bg-primary-50 border-primary-200 text-primary-700'
+                      : 'bg-gray-100 border-gray-200 text-gray-600'
+                  ]">
+              {{ ing.quantity }}× {{ ing.name }}
             </span>
             <span v-if="!recipe._ingredients || recipe._ingredients.length === 0" class="text-gray-300 text-sm italic">
               Tap to add ingredients ↓
@@ -156,10 +167,6 @@
             <div class="mt-4 p-4 bg-blue-50/50 rounded-xl border border-blue-100">
               <div class="flex justify-between items-center mb-2">
                 <p class="text-xs font-semibold text-blue-600 uppercase tracking-wider">📝 Recipe Steps</p>
-                <button @click="saveNotes(recipe)"
-                  class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1.5 rounded-md text-xs font-medium shadow-sm transition-colors active:scale-95 flex items-center gap-1">
-                  <span>💾</span> Save
-                </button>
               </div>
               <StepEditor v-model="recipe.notes" @blur="saveNotes(recipe)" />
             </div>
@@ -179,9 +186,10 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import StepEditor from './StepEditor.vue'
 import ConfirmDialog from './ui/ConfirmDialog.vue'
+import AppBadge from './ui/AppBadge.vue'
 import { useToast } from '../composables/useToast.js'
 
 const { toast } = useToast()
@@ -215,14 +223,12 @@ const nameEditInput = ref(null)
 const qtyEditInput = ref(null)
 const ingNameEditInput = ref(null)
 
-const cardColors = [
-  'bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600',
-  'bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-500',
-  'bg-gradient-to-br from-amber-500 via-orange-500 to-red-400',
-  'bg-gradient-to-br from-emerald-500 via-teal-500 to-cyan-500',
-  'bg-gradient-to-br from-rose-500 via-pink-500 to-fuchsia-400',
-  'bg-gradient-to-br from-sky-500 via-blue-500 to-indigo-500',
-]
+const searchQuery = ref('')
+const filteredRecipes = computed(() => {
+  if (!searchQuery.value.trim()) return recipes.value
+  const q = searchQuery.value.trim().toLowerCase()
+  return recipes.value.filter(r => r.name.toLowerCase().includes(q))
+})
 
 const recipeTotalCost = (recipe) => {
   const ings = recipe._ingredients || []
