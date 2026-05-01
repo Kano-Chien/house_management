@@ -21,6 +21,12 @@
       </div>
     </div>
 
+    <!-- Loading skeleton -->
+    <div v-if="loading" class="space-y-3 mt-4">
+      <div v-for="i in 4" :key="i" class="h-16 bg-gray-100 rounded-2xl animate-pulse" />
+    </div>
+
+    <template v-else>
     <!-- Category Filter -->
     <div class="mb-4 flex gap-1 bg-gray-100 p-1 rounded-xl w-fit">
       <button
@@ -306,6 +312,7 @@
         </div>
       </div>
     </Transition>
+    </template>
 
     <!-- Confirm delete item -->
     <ConfirmDialog
@@ -341,6 +348,7 @@ const SortIcon = {
   </span>`
 }
 
+const loading = ref(true)
 const inventory = ref([])
 const newItem = ref({ name: '', current_stock: 0, price: 0, category: 'food', is_tracked: true })
 const showAddForm = ref(false)
@@ -527,6 +535,8 @@ const fetchInventory = async () => {
     if (res.ok) inventory.value = await res.json()
   } catch (e) {
     toast('Failed to load inventory', 'error')
+  } finally {
+    loading.value = false
   }
 }
 

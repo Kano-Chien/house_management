@@ -9,7 +9,9 @@
       </button>
     </div>
 
-    <div v-if="loading" class="text-gray-400 text-center py-10">Loading...</div>
+    <div v-if="loading" class="space-y-3 mt-2">
+      <div v-for="i in 3" :key="i" class="h-14 bg-gray-100 rounded-2xl animate-pulse" />
+    </div>
 
     <!-- Add custom item -->
     <div class="mb-4">
