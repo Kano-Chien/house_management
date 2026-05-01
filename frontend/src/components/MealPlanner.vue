@@ -5,60 +5,98 @@
     <!-- Week Navigation -->
     <div class="flex justify-between items-center mb-5">
       <button @click="prevWeek" class="bg-white border border-gray-200 px-4 py-2 rounded-xl hover:bg-gray-50 transition-colors shadow-sm font-medium text-gray-600">← Prev</button>
-      <span class="font-semibold text-gray-600">{{ weekLabel }}</span>
+      <div class="flex flex-col items-center gap-1">
+        <span class="font-semibold text-gray-600 text-sm">{{ weekLabel }}</span>
+        <button
+          @click="weekOffset = 0"
+          :class="[
+            'px-3 py-1 rounded-lg text-xs font-medium transition-colors',
+            weekOffset === 0
+              ? 'bg-primary-100 text-primary-700 cursor-default'
+              : 'bg-gray-100 hover:bg-gray-200 text-gray-600'
+          ]"
+          :disabled="weekOffset === 0"
+        >Today</button>
+      </div>
       <button @click="nextWeek" class="bg-white border border-gray-200 px-4 py-2 rounded-xl hover:bg-gray-50 transition-colors shadow-sm font-medium text-gray-600">Next →</button>
     </div>
 
     <!-- Loading skeleton -->
-    <div v-if="loading" class="grid grid-cols-1 md:grid-cols-7 gap-3 mt-4">
+    <div v-if="loading" class="grid grid-cols-2 md:grid-cols-7 gap-3 mt-4">
       <div v-for="i in 7" :key="i" class="h-32 bg-gray-100 rounded-2xl animate-pulse" />
     </div>
 
     <!-- Weekly Calendar Grid -->
-    <div v-else class="grid grid-cols-1 md:grid-cols-7 gap-3 pb-24 md:pb-0">
-      <!-- Day Headers -->
-      <div v-for="day in weekDays" :key="day.dateStr"
-           class="text-center">
+    <div v-else>
+      <!-- Mobile day navigation -->
+      <div class="flex items-center justify-between mb-3 md:hidden">
+        <button
+          @click="mobileDayStart = Math.max(0, mobileDayStart - 1)"
+          :disabled="mobileDayStart === 0"
+          class="w-9 h-9 rounded-xl bg-gray-100 hover:bg-gray-200 disabled:opacity-30 flex items-center justify-center transition-colors"
+        >←</button>
+        <span class="text-sm text-gray-500 font-medium">
+          {{ weekDays[mobileDayStart]?.dayName }} – {{ weekDays[Math.min(mobileDayStart + 1, 6)]?.dayName }}
+        </span>
+        <button
+          @click="mobileDayStart = Math.min(5, mobileDayStart + 1)"
+          :disabled="mobileDayStart >= 5"
+          class="w-9 h-9 rounded-xl bg-gray-100 hover:bg-gray-200 disabled:opacity-30 flex items-center justify-center transition-colors"
+        >→</button>
+      </div>
+
+      <!-- Day cards -->
+      <div class="grid grid-cols-2 md:grid-cols-7 gap-3 pb-24 md:pb-0">
+      <div v-for="(day, idx) in weekDays" :key="day.dateStr"
+           :class="['text-center md:block', idx >= mobileDayStart && idx < mobileDayStart + 2 ? 'block' : 'hidden']">
         <div class="text-xs uppercase tracking-wider font-semibold text-gray-400 mb-1">{{ day.dayName }}</div>
-        <div :class="[day.isToday ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600']"
-             class="rounded-full w-8 h-8 flex items-center justify-center mx-auto text-sm font-bold mb-2">
-          {{ day.dayNum }}
+        <div class="flex items-center justify-center gap-1 mb-2">
+          <div :class="[day.isToday ? 'bg-blue-500 text-white' : 'bg-gray-100 text-gray-600']"
+               class="rounded-full w-8 h-8 flex items-center justify-center text-sm font-bold">
+            {{ day.dayNum }}
+          </div>
+          <span
+            v-if="getMealsForDay(day.dateStr).length > 0"
+            class="inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-primary-100 text-primary-700"
+          >{{ getMealsForDay(day.dateStr).length }}</span>
         </div>
 
         <!-- Day Card -->
-        <div class="bg-white rounded-xl border border-gray-100 shadow-sm min-h-[140px] p-2 flex flex-col gap-2">
+        <div class="bg-white rounded-xl border border-gray-100 shadow-sm min-h-[140px] p-3 flex flex-col gap-1.5">
           <!-- Iterate over meal types -->
           <div v-for="type in ['Breakfast', 'Lunch', 'Dinner']" :key="type">
             <!-- Show block only if there are meals for this type -->
             <div v-if="getMealsForDay(day.dateStr).filter(m => m.meal_type === type).length > 0"
-                 class="rounded-lg p-2 transition-all border mb-1"
+                 class="rounded-lg px-2 py-1.5 transition-all border mb-1"
                  :class="mealTypeStyle(type).bg">
               <!-- Header -->
-              <div class="text-[10px] uppercase tracking-wider font-bold mb-1"
+              <div class="text-[10px] uppercase tracking-wider font-bold mb-1 flex items-center gap-1"
                    :class="mealTypeStyle(type).text">
-                {{ mealTypeStyle(type).icon }} {{ type }}
+                <span>{{ mealTypeStyle(type).icon }}</span>
+                <span class="hidden md:inline">{{ type }}</span>
               </div>
               <!-- Meals List -->
-                  <div class="space-y-1">
+              <div class="space-y-1">
                 <div v-for="meal in getMealsForDay(day.dateStr).filter(m => m.meal_type === type)" :key="meal.id"
-                     class="group relative pl-1.5 pr-1 py-1 hover:bg-white/60 transition-colors rounded-md min-h-[1.75rem]">
+                     class="group relative"
+                     :title="meal.custom_name || meal.recipe_name">
 
                   <!-- Meal Name -->
-                  <div class="text-xs font-medium leading-tight flex items-start gap-1"
-                       :class="meal.is_cooked ? 'text-gray-400 font-normal line-through opacity-70' : 'text-gray-700'"
-                       :title="meal.custom_name || meal.recipe_name">
-                    <span v-if="meal.is_cooked" class="select-none text-xs pt-0.5" title="Yummy!">😋</span>
-                    <span>{{ meal.custom_name || meal.recipe_name || 'Unnamed' }}</span>
+                  <div class="text-[11px] font-medium leading-snug flex items-start gap-1"
+                       :class="meal.is_cooked ? 'text-gray-400 font-normal line-through opacity-70' : 'text-gray-700'">
+                    <span v-if="meal.is_cooked" class="select-none shrink-0" title="Yummy!">😋</span>
+                    <span class="line-clamp-2">{{ meal.custom_name || meal.recipe_name || 'Unnamed' }}</span>
                   </div>
                 </div>
               </div>
             </div>
           </div>
 
-          <!-- Edit Day Button (replaces individual Add button) -->
+          <!-- Edit Day Button -->
           <button @click.stop="openEdit(day.dateStr)"
-                  class="mt-auto w-full text-center text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg py-1 transition-all text-sm font-medium">Edit Day</button>
+                  class="mt-auto w-full text-center text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg py-1.5 transition-all text-xs font-medium">Edit Day</button>
         </div>
+      </div>
       </div>
     </div>
 
@@ -102,15 +140,18 @@
 
               <!-- Newly Added Meals (Pending Save) -->
               <div v-for="meal in newMeals.filter(m => m.meal_type === type)" :key="meal._key"
-                   class="flex items-center justify-between bg-blue-50 border border-blue-100 p-2 rounded-lg">
-                <span class="text-sm font-medium text-blue-700 truncate flex-1">{{ meal.custom_name || getRecipeName(meal.recipe_id) }}</span>
-                <button @click="removeNewMeal(meal)" class="text-blue-400 hover:text-blue-600 p-1">✕</button>
+                   class="flex items-center justify-between bg-gray-50 p-2 rounded-lg group">
+                <div class="flex items-center gap-2 flex-1 min-w-0">
+                  <span class="text-sm font-medium text-gray-700 truncate">{{ meal.custom_name || getRecipeName(meal.recipe_id) }}</span>
+                </div>
+                <button v-if="meal.recipe_id" @click="editNewMeal(meal)" class="text-gray-300 hover:text-blue-400 p-1 transition-colors text-sm leading-none" title="Edit ingredients">✏️</button>
+                <button @click="removeNewMeal(meal)" class="text-gray-300 hover:text-red-400 p-1 ml-1 transition-colors text-lg leading-none">🗑️</button>
               </div>
             </div>
 
             <!-- Add New Meal Controls -->
             <div class="space-y-2">
-              <div v-if="!editingMealId || !showIngredientEditor[type]" class="flex gap-2">
+              <div v-if="!showIngredientEditor[type]" class="flex gap-2">
                 <select v-model="selectedRecipes[type]" @change="onRecipeSelected(type)" class="flex-1 border border-gray-200 rounded-lg text-sm p-1.5 focus:outline-none focus:ring-2 focus:ring-blue-100">
                   <option value="" disabled>Add recipe...</option>
                   <option v-for="r in recipes" :key="r.id" :value="r.id">{{ r.name }}</option>
@@ -148,13 +189,11 @@
                   </select>
                 </div>
 
-                <!-- Save / Cancel -->
+                <!-- Cancel / Add -->
                 <div class="flex gap-2 pt-1">
                   <button @click="cancelIngredientEditor(type)"
                           class="flex-1 py-1.5 rounded-lg bg-white border border-gray-200 text-gray-500 hover:bg-gray-50 text-sm font-medium">Cancel</button>
-                  <button v-if="editingMealId" @click="saveEditingMeal(type)"
-                          class="flex-1 py-1.5 rounded-lg bg-green-500 text-white hover:bg-green-600 text-sm font-medium transition-colors">Save changes</button>
-                  <button v-else @click="addNewMeal(type)"
+                  <button @click="addNewMeal(type)"
                           class="flex-1 py-1.5 rounded-lg bg-blue-500 text-white hover:bg-blue-600 text-sm font-medium transition-colors">Add to meal</button>
                 </div>
               </div>
@@ -184,11 +223,73 @@
       @confirm="confirmCookMealItem"
       @cancel="confirmCookMeal = null"
     />
+
+    <!-- Meal Edit Sub-Modal -->
+    <div v-if="showMealEditModal"
+         class="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-[60] p-4"
+         @click.self="closeMealEditModal">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm flex flex-col max-h-[90vh]">
+        <!-- Header -->
+        <div class="p-5 border-b border-gray-100 flex items-center justify-between flex-shrink-0">
+          <div>
+            <h3 class="font-bold text-base text-gray-800">Edit Meal</h3>
+            <p class="text-xs text-gray-400">{{ mealEditType }}</p>
+          </div>
+          <button @click="closeMealEditModal"
+                  class="w-8 h-8 flex items-center justify-center rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+                  aria-label="Close">
+            <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+              <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/>
+            </svg>
+          </button>
+        </div>
+        <!-- Body -->
+        <div class="p-5 overflow-y-auto flex-1 space-y-4">
+          <!-- Variant Name -->
+          <div>
+            <label class="text-xs font-medium text-gray-500 mb-1 block">Variant name (optional)</label>
+            <input v-model="variantNames[mealEditType]" type="text"
+                   :placeholder="getRecipeName(selectedRecipes[mealEditType]) + ' variant...'"
+                   class="w-full border border-gray-200 rounded-lg text-sm p-2 focus:outline-none focus:ring-2 focus:ring-blue-100" />
+          </div>
+          <!-- Ingredient List -->
+          <div>
+            <label class="text-xs font-medium text-gray-500 mb-1 block">Ingredients</label>
+            <div class="space-y-1.5">
+              <div v-for="(ing, idx) in editingIngredients[mealEditType]" :key="ing.ingredient_id"
+                   class="flex items-center gap-2 bg-white rounded-md p-1.5 border border-gray-100">
+                <span class="text-sm text-gray-700 flex-1 truncate">{{ ing.name }}</span>
+                <input v-model.number="ing.quantity" type="number" min="1"
+                       class="w-16 border border-gray-200 rounded text-sm p-1 text-center focus:outline-none focus:ring-2 focus:ring-blue-100" />
+                <button @click="editingIngredients[mealEditType].splice(idx, 1)"
+                        class="text-gray-300 hover:text-red-400 text-sm px-1">✕</button>
+              </div>
+            </div>
+          </div>
+          <!-- Add Ingredient -->
+          <div>
+            <select v-model="addIngredientSelection[mealEditType]"
+                    @change="addIngredientToEditor(mealEditType)"
+                    class="w-full border border-gray-200 rounded-lg text-sm p-1.5 focus:outline-none focus:ring-2 focus:ring-blue-100">
+              <option value="" disabled>Add ingredient...</option>
+              <option v-for="inv in availableIngredients(mealEditType)" :key="inv.id" :value="inv.id">{{ inv.name }}</option>
+            </select>
+          </div>
+        </div>
+        <!-- Footer -->
+        <div class="p-4 border-t border-gray-100 bg-gray-50 rounded-b-2xl flex gap-3 flex-shrink-0">
+          <button @click="closeMealEditModal"
+                  class="flex-1 py-2.5 rounded-xl bg-white border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors font-semibold text-sm">Cancel</button>
+          <button @click="saveEditingMeal"
+                  class="flex-1 py-2.5 rounded-xl bg-green-500 text-white hover:bg-green-600 transition-colors font-semibold text-sm">Save Meal</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import ConfirmDialog from './ui/ConfirmDialog.vue'
 import { useToast } from '../composables/useToast.js'
 
@@ -214,6 +315,18 @@ const showIngredientEditor = ref({ Breakfast: false, Lunch: false, Dinner: false
 const addIngredientSelection = ref({ Breakfast: '', Lunch: '', Dinner: '' })
 const editingMealId = ref(null) // meal_plan id being edited (null = adding new)
 const updatedMeals = ref([]) // { id, custom_name, ingredients: [] }
+
+const showMealEditModal = ref(false)
+const mealEditType = ref('')
+const editingNewMealKey = ref(null)
+
+// Escape key handler for meal edit sub-modal
+const onMealModalKey = (e) => {
+  if (e.key === 'Escape' && showMealEditModal.value) {
+    e.stopImmediatePropagation()
+    closeMealEditModal()
+  }
+}
 
 const getMonday = (offset) => {
   const d = new Date()
@@ -378,6 +491,7 @@ const addIngredientToEditor = (type) => {
 const editExistingMeal = async (meal) => {
   if (meal.is_cooked) return
   const type = meal.meal_type
+  cancelIngredientEditor(type)
 
   const draftMeal = updatedMeals.value.find(m => m.id === meal.id)
 
@@ -388,6 +502,7 @@ const editExistingMeal = async (meal) => {
       quantity: ing.quantity,
     }))
   } else {
+    let loaded = false
     try {
       const res = await fetch(`/api/mealplan/ingredients?meal_plan_id=${meal.id}`)
       if (res.ok) {
@@ -397,40 +512,59 @@ const editExistingMeal = async (meal) => {
           name: ing.name,
           quantity: ing.quantity,
         }))
+        loaded = true
       }
     } catch (e) { toast('Network error', 'error') }
+    if (!loaded) return
   }
 
   editingMealId.value = meal.id
   selectedRecipes.value[type] = meal.recipe_id || ''
-  
   variantNames.value[type] = draftMeal ? draftMeal.custom_name : (meal.custom_name || '')
-  
-  showIngredientEditor.value[type] = true
+  mealEditType.value = type
+  showMealEditModal.value = true
 }
 
-const saveEditingMeal = (type) => {
-  const mealId = editingMealId.value
-  if (!mealId) return
+const editNewMeal = (meal) => {
+  const type = meal.meal_type
+  editingIngredients.value[type] = meal.ingredients.map(ing => {
+    const inv = inventory.value.find(i => i.id === ing.ingredient_id)
+    return { ingredient_id: ing.ingredient_id, name: inv?.name || 'Unknown', quantity: ing.quantity }
+  })
+  variantNames.value[type] = meal.custom_name || ''
+  selectedRecipes.value[type] = meal.recipe_id || ''
+  editingMealId.value = null
+  editingNewMealKey.value = meal._key
+  mealEditType.value = type
+  showMealEditModal.value = true
+}
+
+const saveEditingMeal = () => {
+  const type = mealEditType.value
+  if (!type) return
 
   const customName = variantNames.value[type].trim()
-  
   const draftIngredients = editingIngredients.value[type]
     .filter(ing => ing.quantity > 0)
-    .map(ing => ({
-      ingredient_id: ing.ingredient_id,
-      name: ing.name,
-      quantity: ing.quantity,
-    }))
+    .map(ing => ({ ingredient_id: ing.ingredient_id, name: ing.name, quantity: ing.quantity }))
 
-  updatedMeals.value = updatedMeals.value.filter(m => m.id !== mealId)
-  updatedMeals.value.push({ 
-    id: mealId, 
-    custom_name: customName, 
-    ingredients: draftIngredients 
-  })
-  
-  cancelIngredientEditor(type)
+  if (editingNewMealKey.value) {
+    const idx = newMeals.value.findIndex(m => m._key === editingNewMealKey.value)
+    if (idx > -1) {
+      newMeals.value[idx] = {
+        ...newMeals.value[idx],
+        custom_name: customName,
+        ingredients: draftIngredients.map(ing => ({ ingredient_id: ing.ingredient_id, quantity: ing.quantity }))
+      }
+    }
+  } else {
+    const mealId = editingMealId.value
+    if (!mealId) return
+    updatedMeals.value = updatedMeals.value.filter(m => m.id !== mealId)
+    updatedMeals.value.push({ id: mealId, custom_name: customName, ingredients: draftIngredients })
+  }
+
+  closeMealEditModal()
 }
 
 const cancelIngredientEditor = (type) => {
@@ -440,6 +574,13 @@ const cancelIngredientEditor = (type) => {
   editingIngredients.value[type] = []
   addIngredientSelection.value[type] = ''
   editingMealId.value = null
+}
+
+const closeMealEditModal = () => {
+  showMealEditModal.value = false
+  cancelIngredientEditor(mealEditType.value)
+  mealEditType.value = ''
+  editingNewMealKey.value = null
 }
 
 const addNewMeal = (type) => {
@@ -543,8 +684,11 @@ const confirmCookMealItem = async () => {
   }
 }
 
+const mobileDayStart = ref(0)
 const prevWeek = () => weekOffset.value--
 const nextWeek = () => weekOffset.value++
+
+watch(weekOffset, () => { mobileDayStart.value = 0 })
 
 const formatDateDisplay = (dateStr) => {
   if (!dateStr) return ''
@@ -555,5 +699,10 @@ onMounted(() => {
   fetchRecipes()
   fetchMealPlan()
   fetchInventory()
+  document.addEventListener('keydown', onMealModalKey)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('keydown', onMealModalKey)
 })
 </script>
