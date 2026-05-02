@@ -591,6 +591,7 @@ const confirmDeleteItem = async () => {
 }
 
 onMounted(fetchInventory)
+defineExpose({ refresh: fetchInventory })
 </script>
 
 <style scoped>

@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 const props = defineProps({
   title: String,
@@ -27,7 +27,7 @@ onMounted(() => {
   document.body.style.overflow = 'hidden'
 })
 
-onUnmounted(() => {
+onBeforeUnmount(() => {
   const idx = modalStack.indexOf(panelEl.value)
   if (idx > -1) modalStack.splice(idx, 1)
   document.removeEventListener('keydown', onKey)

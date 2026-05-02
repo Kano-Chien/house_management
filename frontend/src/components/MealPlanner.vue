@@ -92,9 +92,18 @@
             </div>
           </div>
 
-          <!-- Edit Day Button -->
-          <button @click.stop="openEdit(day.dateStr)"
-                  class="mt-auto w-full text-center text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg py-1.5 transition-all text-xs font-medium">Edit Day</button>
+          <!-- Day Actions -->
+          <div class="mt-auto flex gap-1.5">
+            <button
+              v-if="getMealsForDay(day.dateStr).some(m => !m.is_cooked)"
+              @click.stop="cookAllDay(day.dateStr)"
+              :disabled="isCookingAll"
+              class="flex-1 text-center text-orange-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg py-1.5 transition-all text-xs font-medium disabled:opacity-40">
+              🍳 Cook All
+            </button>
+            <button @click.stop="openEdit(day.dateStr)"
+                    class="flex-1 text-center text-gray-300 hover:text-blue-500 hover:bg-blue-50 rounded-lg py-1.5 transition-all text-xs font-medium">Edit Day</button>
+          </div>
         </div>
       </div>
       </div>
@@ -224,6 +233,87 @@
       @cancel="confirmCookMeal = null"
     />
 
+    <!-- Cook All Day Confirm Dialog -->
+    <div v-if="confirmCookAllDayDate"
+         class="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+         @click.self="confirmCookAllDayDate = null">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div class="p-6 border-b border-gray-100">
+          <h3 class="font-bold text-xl text-gray-800">Cook all meals?</h3>
+          <p class="text-sm text-gray-400 mt-0.5">{{ formatDateDisplay(confirmCookAllDayDate) }}</p>
+        </div>
+        <div class="p-6 space-y-2">
+          <template v-for="type in ['Breakfast', 'Lunch', 'Dinner']" :key="type">
+            <div v-for="meal in getMealsForDay(confirmCookAllDayDate).filter(m => m.meal_type === type && !m.is_cooked)"
+                 :key="meal.id"
+                 class="flex items-center gap-2 px-3 py-2 rounded-lg"
+                 :class="mealTypeStyle(type).bg">
+              <span>{{ mealTypeStyle(type).icon }}</span>
+              <span class="text-sm font-medium text-gray-700">{{ meal.custom_name || meal.recipe_name || 'Unnamed' }}</span>
+            </div>
+          </template>
+          <p class="text-xs text-amber-600 bg-amber-50 rounded-lg px-3 py-2 mt-2">
+            ⚠ Some meals may fail if ingredients are low — we'll cook what we can
+          </p>
+        </div>
+        <div class="flex border-t border-gray-100">
+          <button @click="confirmCookAllDayDate = null"
+                  class="flex-1 py-3.5 text-gray-500 hover:bg-gray-50 transition-colors font-semibold text-sm">
+            Cancel
+          </button>
+          <button @click="confirmCookAllDayAction"
+                  :disabled="isCookingAll"
+                  class="flex-1 py-3.5 text-orange-500 hover:bg-orange-50 transition-colors font-bold text-sm border-l border-gray-100 disabled:opacity-40">
+            {{ isCookingAll ? 'Cooking...' : 'Cook All 🍳' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Cook All Day Result Modal -->
+    <div v-if="cookAllDayResult"
+         class="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+         @click.self="closeCookAllResult">
+      <div class="bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
+        <div class="p-6 border-b border-gray-100">
+          <h3 class="font-bold text-xl text-gray-800">Cooking done 🍳</h3>
+          <p class="text-sm text-gray-400 mt-0.5">{{ formatDateDisplay(cookAllDayResult.date) }}</p>
+        </div>
+        <div class="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+          <div v-if="cookAllDayResult.cooked.length > 0">
+            <p class="text-xs font-bold text-green-700 uppercase tracking-wider mb-2">
+              ✅ Cooked ({{ cookAllDayResult.cooked.length }})
+            </p>
+            <div class="space-y-1">
+              <div v-for="meal in cookAllDayResult.cooked" :key="meal.id"
+                   class="text-sm text-gray-700 bg-green-50 rounded-lg px-3 py-2">
+                {{ meal.name }}
+              </div>
+            </div>
+          </div>
+          <div v-if="cookAllDayResult.failed.length > 0">
+            <p class="text-xs font-bold text-red-600 uppercase tracking-wider mb-2">
+              ❌ Couldn't Cook ({{ cookAllDayResult.failed.length }})
+            </p>
+            <div class="space-y-2">
+              <div v-for="meal in cookAllDayResult.failed" :key="meal.id"
+                   class="bg-red-50 rounded-lg px-3 py-2">
+                <p class="text-sm font-semibold text-gray-700 mb-1">{{ meal.name }}</p>
+                <p v-for="(m, i) in meal.missing" :key="i"
+                   class="text-xs text-red-700">• {{ m }}</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="p-4 border-t border-gray-100">
+          <button @click="closeCookAllResult"
+                  class="w-full py-2.5 rounded-xl bg-gray-900 text-white font-semibold text-sm hover:bg-gray-800 transition-colors">
+            OK
+          </button>
+        </div>
+      </div>
+    </div>
+
     <!-- Meal Edit Sub-Modal -->
     <div v-if="showMealEditModal"
          class="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-[60] p-4"
@@ -293,6 +383,7 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import ConfirmDialog from './ui/ConfirmDialog.vue'
 import { useToast } from '../composables/useToast.js'
 
+const emit = defineEmits(['inventory-changed'])
 const { toast } = useToast()
 const confirmCookMeal = ref(null)
 
@@ -319,6 +410,10 @@ const updatedMeals = ref([]) // { id, custom_name, ingredients: [] }
 const showMealEditModal = ref(false)
 const mealEditType = ref('')
 const editingNewMealKey = ref(null)
+
+const confirmCookAllDayDate = ref(null)
+const cookAllDayResult = ref(null)
+const isCookingAll = ref(false)
 
 // Escape key handler for meal edit sub-modal
 const onMealModalKey = (e) => {
@@ -675,6 +770,7 @@ const confirmCookMealItem = async () => {
     })
     if (res.ok) {
       await fetchMealPlan()
+      emit('inventory-changed')
       toast('Marked as cooked! 🍳')
     } else {
       toast('Failed to mark as cooked', 'error')
@@ -682,6 +778,43 @@ const confirmCookMealItem = async () => {
   } catch (e) {
     toast('Failed to mark as cooked', 'error')
   }
+}
+
+const cookAllDay = (dateStr) => {
+  confirmCookAllDayDate.value = dateStr
+}
+
+const confirmCookAllDayAction = async () => {
+  const date = confirmCookAllDayDate.value
+  confirmCookAllDayDate.value = null
+  isCookingAll.value = true
+  try {
+    const res = await fetch('/api/mealplan/cook-day', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ date })
+    })
+    if (!res.ok) {
+      toast('Failed to cook meals', 'error')
+      return
+    }
+    const result = await res.json()
+    await fetchMealPlan()
+    if (result.cooked.length > 0) emit('inventory-changed')
+    if (result.cooked.length === 0 && result.failed.length === 0) {
+      toast('Nothing to cook')
+    } else {
+      cookAllDayResult.value = { date, ...result }
+    }
+  } catch (e) {
+    toast('Network error', 'error')
+  } finally {
+    isCookingAll.value = false
+  }
+}
+
+const closeCookAllResult = () => {
+  cookAllDayResult.value = null
 }
 
 const mobileDayStart = ref(0)
