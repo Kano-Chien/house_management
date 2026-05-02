@@ -44,9 +44,9 @@
 
     <!-- Main content — v-show keeps components mounted between tab switches -->
     <main class="max-w-4xl mx-auto pb-24 md:pb-8 px-0">
-      <InventoryTable v-show="currentTab === 'inventory'" />
+      <InventoryTable ref="inventoryTable" v-show="currentTab === 'inventory'" />
       <RecipeManager  v-show="currentTab === 'recipes'"   />
-      <MealPlanner    v-show="currentTab === 'planning'"  />
+      <MealPlanner    v-show="currentTab === 'planning'"  @inventory-changed="inventoryTable?.refresh()" />
       <ShoppingList   v-show="currentTab === 'shopping'"  />
     </main>
   </div>
@@ -60,6 +60,7 @@ import MealPlanner    from './components/MealPlanner.vue'
 import ShoppingList   from './components/ShoppingList.vue'
 import AppToast       from './components/ui/AppToast.vue'
 
+const inventoryTable = ref(null)
 const tabs = [
   { id: 'inventory', label: 'Inventory', icon: '📦' },
   { id: 'recipes',   label: 'Recipes',   icon: '📖' },

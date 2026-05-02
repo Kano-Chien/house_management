@@ -227,6 +227,14 @@ func main() {
 		}
 	})
 
+	mux.HandleFunc("/api/mealplan/cook-day", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == "POST" {
+			mealPlanHandler.CookAllDay(w, r)
+		} else {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
+
 	mux.HandleFunc("/api/shopping-list", func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
 		case "GET":

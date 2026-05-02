@@ -402,6 +402,219 @@ func (h *MealPlanHandler) CookMeal(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]string{"status": "cooked"})
 }
 
+func (h *MealPlanHandler) cookOneMeal(mealID int) (missing []string, err error) {
+	tx, err := h.DB.Begin()
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	var recipeID sql.NullInt64
+	var isCooked bool
+	err = tx.QueryRow("SELECT recipe_id, COALESCE(is_cooked, FALSE) FROM meal_plan WHERE id = ?", mealID).Scan(&recipeID, &isCooked)
+	if err != nil {
+		return nil, err
+	}
+	if isCooked {
+		return nil, nil
+	}
+
+	if _, err = tx.Exec("UPDATE meal_plan SET is_cooked = TRUE WHERE id = ?", mealID); err != nil {
+		return nil, err
+	}
+
+	type ingredientUpdate struct {
+		ID   int
+		Name string
+		Qty  int
+	}
+
+	scanRows := func(rows *sql.Rows) ([]ingredientUpdate, []string, error) {
+		var upd []ingredientUpdate
+		var miss []string
+		for rows.Next() {
+			var u ingredientUpdate
+			var currentStock int
+			if err := rows.Scan(&u.ID, &u.Name, &u.Qty, &currentStock); err != nil {
+				rows.Close()
+				return nil, nil, err
+			}
+			if currentStock < u.Qty {
+				miss = append(miss, fmt.Sprintf("%s (Need: %d, Have: %d)", u.Name, u.Qty, currentStock))
+			}
+			upd = append(upd, u)
+		}
+		rows.Close()
+		return upd, miss, rows.Err()
+	}
+
+	rows, err := tx.Query(`
+		SELECT mpi.ingredient_id, i.name, mpi.quantity, i.current_stock
+		FROM meal_plan_ingredients mpi
+		JOIN ingredients i ON mpi.ingredient_id = i.id
+		WHERE mpi.meal_plan_id = ? AND i.is_tracked = TRUE
+	`, mealID)
+	if err != nil {
+		return nil, err
+	}
+	updates, missIngredients, err := scanRows(rows)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(updates) == 0 && recipeID.Valid {
+		if _, err = tx.Exec(`
+			INSERT INTO meal_plan_ingredients (meal_plan_id, ingredient_id, quantity)
+			SELECT ?, ri.ingredient_id, ri.quantity
+			FROM recipe_ingredients ri WHERE ri.recipe_id = ?
+		`, mealID, recipeID.Int64); err != nil {
+			return nil, err
+		}
+		rows, err = tx.Query(`
+			SELECT mpi.ingredient_id, i.name, mpi.quantity, i.current_stock
+			FROM meal_plan_ingredients mpi
+			JOIN ingredients i ON mpi.ingredient_id = i.id
+			WHERE mpi.meal_plan_id = ? AND i.is_tracked = TRUE
+		`, mealID)
+		if err != nil {
+			return nil, err
+		}
+		updates, missIngredients, err = scanRows(rows)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if len(missIngredients) > 0 {
+		return missIngredients, nil
+	}
+
+	for _, u := range updates {
+		remaining := u.Qty
+		batchRows, err := tx.Query(`
+			SELECT id, quantity FROM ingredient_batches
+			WHERE ingredient_id = ?
+			ORDER BY CASE WHEN expiry_date IS NULL OR expiry_date = '' THEN 1 ELSE 0 END,
+			         expiry_date ASC, id ASC
+		`, u.ID)
+		if err != nil {
+			return nil, err
+		}
+		type batchItem struct{ ID, Qty int }
+		var batches []batchItem
+		for batchRows.Next() {
+			var b batchItem
+			if err := batchRows.Scan(&b.ID, &b.Qty); err != nil {
+				batchRows.Close()
+				return nil, err
+			}
+			batches = append(batches, b)
+		}
+		batchRows.Close()
+
+		for _, b := range batches {
+			if remaining <= 0 {
+				break
+			}
+			consume := b.Qty
+			if consume > remaining {
+				consume = remaining
+			}
+			remaining -= consume
+			newQty := b.Qty - consume
+			if newQty == 0 {
+				if _, err := tx.Exec("DELETE FROM ingredient_batches WHERE id = ?", b.ID); err != nil {
+					return nil, err
+				}
+			} else {
+				if _, err := tx.Exec("UPDATE ingredient_batches SET quantity = ? WHERE id = ?", newQty, b.ID); err != nil {
+					return nil, err
+				}
+			}
+		}
+		if _, err := tx.Exec(
+			"UPDATE ingredients SET current_stock = (SELECT COALESCE(SUM(quantity), 0) FROM ingredient_batches WHERE ingredient_id = ?) WHERE id = ?",
+			u.ID, u.ID,
+		); err != nil {
+			return nil, err
+		}
+	}
+
+	return nil, tx.Commit()
+}
+
+func (h *MealPlanHandler) CookAllDay(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Date string `json:"date"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if _, err := time.Parse("2006-01-02", req.Date); err != nil {
+		http.Error(w, "Invalid date format. Use YYYY-MM-DD", http.StatusBadRequest)
+		return
+	}
+
+	rows, err := h.DB.Query(`
+		SELECT mp.id, COALESCE(NULLIF(mp.custom_name, ''), r.name, 'Unnamed')
+		FROM meal_plan mp
+		LEFT JOIN recipes r ON mp.recipe_id = r.id
+		WHERE mp.date = ? AND COALESCE(mp.is_cooked, FALSE) = FALSE
+	`, req.Date)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	type mealInfo struct {
+		ID   int
+		Name string
+	}
+	var meals []mealInfo
+	for rows.Next() {
+		var m mealInfo
+		if err := rows.Scan(&m.ID, &m.Name); err != nil {
+			rows.Close()
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		meals = append(meals, m)
+	}
+	rows.Close()
+
+	type cookedResult struct {
+		ID   int    `json:"id"`
+		Name string `json:"name"`
+	}
+	type failedResult struct {
+		ID      int      `json:"id"`
+		Name    string   `json:"name"`
+		Missing []string `json:"missing"`
+	}
+
+	cooked := []cookedResult{}
+	failed := []failedResult{}
+
+	for _, m := range meals {
+		missIngredients, err := h.cookOneMeal(m.ID)
+		if err != nil {
+			failed = append(failed, failedResult{ID: m.ID, Name: m.Name, Missing: []string{err.Error()}})
+			continue
+		}
+		if len(missIngredients) > 0 {
+			failed = append(failed, failedResult{ID: m.ID, Name: m.Name, Missing: missIngredients})
+		} else {
+			cooked = append(cooked, cookedResult{ID: m.ID, Name: m.Name})
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"cooked": cooked,
+		"failed": failed,
+	})
+}
+
 func (h *MealPlanHandler) GetMealPlanIngredients(w http.ResponseWriter, r *http.Request) {
 	mealPlanIDStr := r.URL.Query().Get("meal_plan_id")
 	if mealPlanIDStr == "" {
