@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: house-management
+  namespace: house-management
+  labels:
+    app: house-management
+spec:
+  type: ClusterIP
+  selector:
+    app: house-management
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

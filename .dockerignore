@@ -1,0 +1,27 @@
+.git
+.github
+.gitignore
+README.md
+deploy/
+
+# frontend
+frontend/node_modules
+frontend/dist
+frontend/.vite
+frontend/coverage
+
+# backend/runtime data
+backend/*.db
+backend/*.db-*
+backend/uploads
+*.db
+*.db-*
+uploads/
+data/
+
+# local/editor files
+.env
+.env.*
+.DS_Store
+.idea
+.vscode
