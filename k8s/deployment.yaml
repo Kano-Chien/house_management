@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: house-management
+  namespace: house-management
+  labels:
+    app: house-management
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: house-management
+  template:
+    metadata:
+      labels:
+        app: house-management
+    spec:
+      containers:
+        - name: house-management
+          image: ghcr.io/kano-chien/house-management:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: house-management-config
+            - secretRef:
+                name: house-management-secret
+                optional: true
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+            - name: data
+              mountPath: /app/uploads
+              subPath: uploads
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: house-management-data
